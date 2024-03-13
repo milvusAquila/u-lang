@@ -1,0 +1,123 @@
+use iced::{
+    executor,
+    widget::{button, column, container, horizontal_space, row, text, text_editor},
+    Application, Command, Element, Length, Settings, Theme,
+};
+use std::{
+    io,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+
+fn main() -> iced::Result {
+    App::run(Settings::default())
+}
+
+struct App {
+    content: text_editor::Content,
+    error: Option<Error>,
+    path: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone)]
+enum Message {
+    Edit(text_editor::Action),
+    Open,
+    FileOpened(Result<(PathBuf, Arc<String>), Error>),
+}
+
+#[derive(Debug, Clone)]
+enum Error {
+    DialogClosed,
+    IO(io::ErrorKind),
+}
+
+impl Application for App {
+    type Message = Message;
+    type Theme = Theme;
+    type Executor = executor::Default;
+    type Flags = ();
+
+    fn new(_flag: Self::Flags) -> (Self, Command<Message>) {
+        (
+            Self {
+                content: text_editor::Content::new(),
+                error: None,
+                path: None,
+            },
+            Command::perform(load_file(default_file()), Message::FileOpened),
+        )
+    }
+
+    fn title(&self) -> String {
+        String::from("My first app with iced")
+    }
+
+    fn update(&mut self, message: Message) -> Command<Message> {
+        match message {
+            Message::Edit(action) => {
+                self.content.perform(action);
+                Command::none()
+            }
+            Message::Open => Command::perform(pick_file(), Message::FileOpened),
+            Message::FileOpened(Ok((path, content))) => {
+                self.path = Some(path);
+                self.content = text_editor::Content::with_text(&content);
+                Command::none()
+            }
+            Message::FileOpened(Err(error)) => {
+                self.error = Some(error);
+                Command::none()
+            }
+        }
+    }
+
+    fn view(&self) -> Element<'_, Message> {
+        let controls = row![button("Open").on_press(Message::Open)];
+        let input = text_editor(&self.content)
+            .height(Length::Fill)
+            .on_action(Message::Edit);
+        let file_path = match self.path.as_deref().and_then(Path::to_str) {
+            Some(path) => text(path).size(14),
+            None => text(""),
+        };
+        let position = {
+            let (line, column) = self.content.cursor_position();
+            text(format!("{}:{}", line + 1, column + 1))
+        };
+        let status_bar = row![file_path, horizontal_space(), position];
+
+        // let head_one = text("Français");
+        // let head_two = text("Anglais");
+
+        container(column![controls, input, status_bar].spacing(10))
+            .padding(10)
+            .into()
+    }
+
+    fn theme(&self) -> Theme {
+        Theme::Dark
+    }
+}
+
+fn default_file() -> PathBuf {
+    PathBuf::from(format!("{}/src/main.rs", env!("CARGO_MANIFEST_DIR")))
+}
+
+async fn load_file(path: PathBuf) -> Result<(PathBuf, Arc<String>), Error> {
+    let contents = tokio::fs::read_to_string(&path)
+        .await
+        .map(Arc::new)
+        .map_err(|error| error.kind())
+        .map_err(Error::IO)?;
+    Ok((path, contents))
+}
+
+async fn pick_file() -> Result<(PathBuf, Arc<String>), Error> {
+    let handle = rfd::AsyncFileDialog::new()
+        .set_title("Choose a text file...")
+        .pick_file()
+        .await
+        .ok_or(Error::DialogClosed)?;
+    load_file(handle.path().to_owned()).await
+}
