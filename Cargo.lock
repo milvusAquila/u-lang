@@ -2983,6 +2983,7 @@ version = "0.1.0"
 dependencies = [
  "iced",
  "json",
+ "rand",
  "rfd",
  "tokio",
 ]

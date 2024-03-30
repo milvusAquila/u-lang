@@ -1,17 +1,22 @@
 use iced::{
     executor,
-    widget::{button, column, container, horizontal_space, row, text, text_input},
-    Application, Command, Element, Settings, Theme,
+    widget::{button, column, container, horizontal_space, row, space::Space, text, text_input},
+    Application, Command, Element, Length, Settings, Theme,
 };
-use std::{io, path::PathBuf, sync::Arc};
+use rand::{seq::SliceRandom, thread_rng};
+use std::{io, path::PathBuf, sync::Arc, vec};
+
+mod word;
+use word::*;
 
 fn main() -> iced::Result {
     App::run(Settings::default())
 }
 
 struct App {
-    content: Vec<String>,
-    current: Option<u8>,
+    content: Vec<Entry>,
+    current: Option<usize>,
+    entry: String,
     error: Option<Error>,
     file: Option<PathBuf>,
 }
@@ -37,15 +42,17 @@ impl Application for App {
     fn new(_flag: Self::Flags) -> (Self, Command<Message>) {
         (
             Self {
-                content: Vec::new(),
-                current: None,
+                content: {
+                    let mut content = temporary();
+                    content.shuffle(&mut thread_rng());
+                    content
+                },
+                current: Some(0),
+                entry: String::new(),
                 error: None,
                 file: None,
             },
-            Command::perform(
-                load_file(default_file()),
-                Message::FileOpened,
-            ),
+            Command::perform(load_file(default_file()), Message::FileOpened),
         )
     }
 
@@ -61,7 +68,7 @@ impl Application for App {
             Message::FileOpened(result) => {
                 if let Ok((path, contents)) = result {
                     self.file = Some(path);
-                    self.content = todo!();
+                    self.content = temporary(); // TODO!
                 };
                 Command::none()
             }
@@ -81,12 +88,13 @@ impl Application for App {
         let head_one = text("Français");
         let head_two = text("Anglais");
 
-        let input_one = text_input("Write your answer", &self.content[0]);
-        let input_two = text_input("Write your answer", &self.content[0]);
+        let input = text_input("Write your answer", &self.entry);
+        let known = text((&self.content[self.current.unwrap()]).get(0));
 
-        container(column![
-            row![head_one, input_one.on_input(Message::TextInputChanged)],
-            row![head_two, input_two.on_input(Message::TextInputChanged)],
+        container(row![
+            column![head_one.height(2.), head_two,],
+            Space::with_width(Length::Fixed(20.)),
+            column![input.on_input(Message::TextInputChanged), known,],
         ])
         .padding(10)
         .into()
@@ -98,7 +106,10 @@ impl Application for App {
 }
 
 fn default_file() -> PathBuf {
-    PathBuf::from(format!("{}/assets/default.json", env!("CARGO_MANIFEST_DIR")))
+    PathBuf::from(format!(
+        "{}/assets/default.json",
+        env!("CARGO_MANIFEST_DIR")
+    ))
 }
 
 async fn load_file(path: PathBuf) -> Result<(PathBuf, Arc<String>), Error> {
@@ -116,4 +127,15 @@ async fn pick_file() -> Result<(PathBuf, Arc<String>), Error> {
         .await
         .ok_or(Error::DialogClosed)?;
     load_file(handle.path().to_owned()).await
+}
+
+fn temporary() -> Vec<Entry> {
+    vec![
+        Entry("yes".into(), "oui".into(), GramClass::Noun),
+        Entry("der Gast".into(), "l'invité".into(), GramClass::Noun),
+        Entry("die Arbeit".into(), "le travail".into(), GramClass::Noun),
+        Entry("die Heimat".into(), "la patrie".into(), GramClass::Noun),
+        Entry("die Lösung".into(), "la solution".into(), GramClass::Noun),
+        Entry("die Ankunft".into(), "l'arrivée".into(), GramClass::Noun),
+    ]
 }
