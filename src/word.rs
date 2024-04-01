@@ -1,4 +1,4 @@
-pub struct Entry (pub Word, pub Word, pub GramClass);
+pub struct Entry(pub Word, pub Word, pub GramClass);
 
 pub enum Word {
     One(String),
