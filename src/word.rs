@@ -1,11 +1,15 @@
+#[derive(Debug)]
 pub struct Entry(pub Word, pub Word, pub GramClass);
 
+#[derive(Debug)]
 pub enum Word {
     One(String),
     List(Vec<String>),
 }
 
+#[derive(Debug)]
 pub enum GramClass {
+    Adverb,
     Noun,
     Verb,
 }
@@ -22,6 +26,12 @@ impl Entry {
                 }
                 formatted
             }
+        }
+    }
+    pub fn correct(&self, answer: &String) -> f32 {
+        match &self.1 {
+            Word::One(word) => if word == answer { 1. } else { 0. },
+            Word::List(words) => if words.contains(answer) { 1. } else { 0. },
         }
     }
 }
