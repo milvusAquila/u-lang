@@ -1,3 +1,5 @@
+use core::panic;
+
 #[derive(Debug)]
 pub struct Entry(pub Word, pub Word, pub GramClass);
 
@@ -16,7 +18,11 @@ pub enum GramClass {
 
 impl Entry {
     pub fn get(&self, lang: usize) -> String {
-        let word = &self.0;
+        let word = match lang {
+            0 => &self.0,
+            1 => &self.1,
+            _ => panic!("Unavailable index"),
+        };
         match word {
             Word::One(content) => content.to_string(),
             Word::List(content) => {
@@ -29,7 +35,7 @@ impl Entry {
         }
     }
     pub fn correct(&self, answer: &String) -> f32 {
-        match &self.1 {
+        match &self.0 {
             Word::One(word) => if word == answer { 1. } else { 0. },
             Word::List(words) => if words.contains(answer) { 1. } else { 0. },
         }
