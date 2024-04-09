@@ -12,6 +12,7 @@ mod word;
 use settings::*;
 use word::*;
 
+#[derive(Debug)]
 pub struct App {
     content: Vec<Entry>,
     current: Option<usize>,
@@ -21,7 +22,7 @@ pub struct App {
     langs: [String; 2],
     state: State,
     last_score: f32,
-    total_score: (f32, u16),
+    total_score: (f32, usize),
 }
 
 impl Default for App {
@@ -29,22 +30,22 @@ impl Default for App {
         let mut default_content = vec![
             Entry("yes".into(), "oui".into(), GramClass::Adverb),
             Entry("no".into(), "non".into(), GramClass::Adverb),
-            Entry("the work".into(), "travail".into(), GramClass::Noun),
+            Entry("the work".into(), "le travail".into(), GramClass::Noun),
             Entry("the rust".into(), "la rouille".into(), GramClass::Noun),
             Entry("the solution".into(), "la solution".into(), GramClass::Noun),
-            Entry("to rise".into(), "s'élever'".into(), GramClass::Verb),
+            Entry("to rise".into(), "s'élever".into(), GramClass::Verb),
         ];
         default_content.shuffle(&mut thread_rng());
         Self {
+            total_score: (0., default_content.len()),
             content: default_content,
             current: Some(0),
             entry: String::new(),
             error: None,
             file: None,
             langs: ["English".into(), "French".into()],
-            state: State::Starting,
+            state: State::WaitUserAnswer,
             last_score: 0.,
-            total_score: (0., 0),
         }
     }
 }
@@ -113,13 +114,14 @@ impl Application for App {
                 Command::none()
             }
             Message::Next => {
+                self.entry = String::new();
                 match self.current {
                     Some(nb) => {
                         self.current = if nb + 1 == self.content.len() {
                             self.state = State::NotRunning;
                             None
                         } else {
-                            self.entry = String::new();
+                            self.state = State::WaitUserAnswer;
                             Some(nb + 1)
                         }
                     }
@@ -145,21 +147,34 @@ impl Application for App {
         let head_one = text(&self.langs[0]).width(max_len);
         let head_two = text(&self.langs[1]).width(max_len);
 
-        let input = text_input("Write your answer", &self.entry)
-            .on_input(Message::TextInputChanged)
-            .on_submit(match self.state {
-                State::WaitUserAnswer => Message::Correction,
-                State::Correcting => Message::Next,
-                State::Starting => Message::Start,
-                _ => Message::None,
-            });
+        let mut first_row = row![head_one];
+        if let State::WaitUserAnswer = self.state {
+            first_row = first_row.push(
+                text_input("Write your answer", &self.entry)
+                    .on_input(Message::TextInputChanged)
+                    .on_submit(match self.state {
+                        State::WaitUserAnswer => Message::Correction,
+                        State::Correcting => Message::Next,
+                        State::Starting => Message::Start,
+                        _ => Message::None,
+                    }),
+            );
+        }
+        if let State::Correcting = self.state {
+            first_row = first_row
+                .push(text(&self.entry))
+                .push_maybe(match &self.current {
+                    Some(nb) => Some(text(&self.content[*nb].get(0))),
+                    None => None,
+                });
+        }
         let known = text((&self.content[self.current.unwrap()]).get(1));
 
         let score = text(&format!(
             "{} / 1\n{} / {} ({})",
             self.last_score,
             self.total_score.0,
-            self.current.unwrap_or(0),
+            self.current.unwrap_or(0) + 1,
             self.total_score.1,
         ));
         let next_button = button(match self.state {
@@ -177,9 +192,11 @@ impl Application for App {
 
         let settings = button("Settings").on_press(Message::OpenSettings);
 
+        let header = row![horizontal_space(), settings].spacing(10);
         container(column![
-            row![horizontal_space(), settings],
-            row![head_one, Space::new(Length::Fill, 10), input],
+            header,
+            first_row,
+            Space::new(Length::Fill, 10),
             row![head_two, known],
             Space::new(Length::Fill, 10),
             row!(
@@ -190,7 +207,9 @@ impl Application for App {
                 score.horizontal_alignment(Horizontal::Right),
                 // Space::new(10, Length::Fill),
                 next_button,
-            ),
+            )
+            .spacing(10)
+            .padding(10),
         ])
         .padding(10)
         .into()
