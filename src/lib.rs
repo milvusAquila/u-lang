@@ -168,7 +168,10 @@ impl Application for App {
                     None => None,
                 });
         }
-        let known = text((&self.content[self.current.unwrap()]).get(1));
+        let known = text(match self.current {
+            Some(nb) => self.content[nb].get(1),
+            None => "".into(),
+        });
 
         let score = text(&format!(
             "{} / 1\n{} / {} ({})",
