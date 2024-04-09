@@ -230,6 +230,7 @@ fn default_file() -> PathBuf {
     ))
 }
 
+#[cfg(not(target_family = "wasm"))]
 async fn load_file(path: PathBuf) -> Result<(PathBuf, Arc<String>), Error> {
     let contents = tokio::fs::read_to_string(&path)
         .await
@@ -238,6 +239,7 @@ async fn load_file(path: PathBuf) -> Result<(PathBuf, Arc<String>), Error> {
     Ok((path, contents))
 }
 
+#[cfg(not(target_family = "wasm"))]
 async fn _pick_file() -> Result<(PathBuf, Arc<String>), Error> {
     let handle = rfd::AsyncFileDialog::new()
         .set_title("Choose a text file...")
