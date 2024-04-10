@@ -85,7 +85,7 @@ impl Application for App {
     fn new(_flag: Self::Flags) -> (Self, Command<Message>) {
         (
             Self::default(),
-            Command::perform(load_file(default_file()), Message::FileOpened),
+            Command::none(),
         )
     }
 
@@ -223,13 +223,6 @@ impl Application for App {
     }
 }
 
-fn default_file() -> PathBuf {
-    PathBuf::from(format!(
-        "{}/assets/default.json",
-        env!("CARGO_MANIFEST_DIR")
-    ))
-}
-
 #[cfg(not(target_family = "wasm"))]
 async fn load_file(path: PathBuf) -> Result<(PathBuf, Arc<String>), Error> {
     let contents = tokio::fs::read_to_string(&path)
@@ -239,12 +232,24 @@ async fn load_file(path: PathBuf) -> Result<(PathBuf, Arc<String>), Error> {
     Ok((path, contents))
 }
 
+#[cfg(target_family = "wasm")]
+async fn load_file(path: PathBuf) -> Result<(PathBuf, Arc<String>), Error> {
+    let future = async {
+        let file = rfd::AsyncFileDialog::new().pick_file().await;
+        file.unwrap().read().await
+    };
+    let data = async_std::task::block_on(future);
+}
+
 #[cfg(not(target_family = "wasm"))]
 async fn _pick_file() -> Result<(PathBuf, Arc<String>), Error> {
-    let handle = rfd::AsyncFileDialog::new()
+    let opt_handle = rfd::AsyncFileDialog::new()
         .set_title("Choose a text file...")
         .pick_file()
-        .await
-        .ok_or(Error::DialogClosed)?;
-    load_file(handle.path().to_owned()).await
+        .await;
+    // load_file(handle.path().to_owned()).await
+   match opt_handle {
+        Some(handle) => load_file(handle.path().to_owned()).await,
+        None => Err(Error::DialogClosed),
+   } 
 }
