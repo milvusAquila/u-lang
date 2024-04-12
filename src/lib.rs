@@ -63,7 +63,7 @@ pub enum Message {
 
 #[derive(Debug, Clone)]
 enum Error {
-    IoError(io::ErrorKind),
+    IoError,
     DialogClosed,
 }
 
@@ -164,6 +164,10 @@ impl Application for App {
             first_row = first_row
                 .push(text(&self.entry))
                 .push_maybe(match &self.current {
+                    Some(_) => Some(Space::new(10, 0)),
+                    None => None,
+                })
+                .push_maybe(match &self.current {
                     Some(nb) => Some(text(&self.content[*nb].get(0))),
                     None => None,
                 });
@@ -223,14 +227,14 @@ impl Application for App {
     }
 }
 
-#[cfg(not(target_family = "wasm"))]
+/* #[cfg(not(target_family = "wasm"))]
 async fn load_file(path: PathBuf) -> Result<(PathBuf, Arc<String>), Error> {
     let contents = tokio::fs::read_to_string(&path)
         .await
         .map(Arc::new)
         .map_err(|error| Error::IoError(error.kind()))?;
     Ok((path, contents))
-}
+} */
 
 #[cfg(target_family = "wasm")]
 async fn load_file(path: PathBuf) -> Result<(PathBuf, Arc<String>), Error> {
@@ -249,7 +253,13 @@ async fn _pick_file() -> Result<(PathBuf, Arc<String>), Error> {
         .await;
     // load_file(handle.path().to_owned()).await
    match opt_handle {
-        Some(handle) => load_file(handle.path().to_owned()).await,
+        Some(handle) => {
+            let path = handle.path();
+            match async_std::fs::read_to_string(path).await {
+                Ok(raw) => Ok((path.into(), Arc::new(raw))),
+                Err(_) => Err(Error::IoError),
+            }
+        }
         None => Err(Error::DialogClosed),
    } 
 }
