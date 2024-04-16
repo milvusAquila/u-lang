@@ -22,7 +22,7 @@ struct App {
     entry: String,
     error: Option<Error>,
     file: Option<PathBuf>,
-    langs: [String; 2],
+    langs: [Lang; 2],
     state: State,
     last_score: f32,
     total_score: (f32, usize),
@@ -139,9 +139,13 @@ impl iced::Application for App {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let max_len = *(self.langs.clone().map(|lang| lang.len()).iter())
-            .max()
-            .unwrap_or(&15) as u16
+        let max_len = *(self
+            .langs
+            .clone()
+            .map(|lang| format!("{}", lang).len())
+            .iter())
+        .max()
+        .unwrap_or(&15) as u16
             * 20;
 
         let head_one = text(&self.langs[0]).width(max_len);
@@ -226,24 +230,6 @@ impl iced::Application for App {
     fn theme(&self) -> Theme {
         Theme::Dark
     }
-}
-
-/* #[cfg(not(target_family = "wasm"))]
-async fn load_file(path: PathBuf) -> Result<(PathBuf, Arc<String>), Error> {
-    let contents = tokio::fs::read_to_string(&path)
-        .await
-        .map(Arc::new)
-        .map_err(|error| Error::IoError(error.kind()))?;
-    Ok((path, contents))
-} */
-
-#[cfg(target_family = "wasm")]
-async fn load_file(path: PathBuf) -> Result<(PathBuf, Arc<String>), Error> {
-    let future = async {
-        let file = rfd::AsyncFileDialog::new().pick_file().await;
-        file.unwrap().read().await
-    };
-    let data = async_std::task::block_on(future);
 }
 
 #[cfg(not(target_family = "wasm"))]

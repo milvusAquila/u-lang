@@ -46,10 +46,50 @@ impl Entry {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Lang {
     English,
     French,
     German,
     Other,
 }
+
+impl<'a> Into<&'a str> for Lang {
+    fn into(self) -> &'a str {
+        match self {
+            Self::English => "English",
+            Self::German => "Deutsch",
+            Self::French => "Français",
+            Self::Other => "Other",
+        }
+    }
+}
+
+impl From<&str> for Lang {
+    fn from(value: &str) -> Self {
+        match value {
+            "English" | "english" => Self::English,
+            "German" | "Deutsch" | "german" | "deutsch" => Self::German,
+            "French" | "Français" | "french" | "français" | "Francais" | "francais" => {
+                Self::French
+            }
+            _ => Self::Other,
+        }
+    }
+}
+impl std::fmt::Display for Lang {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let string = match self {
+            Lang::English => "English",
+            Lang::German => "Deutsch",
+            Lang::French => "Français",
+            Lang::Other => "Other",
+        };
+        write!(f, "{}", string)
+    }
+}
+/* impl From<Lang> for String {
+    fn from(value: Lang) -> Self {
+        value.into()
+    }
+} */
