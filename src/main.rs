@@ -1,3 +1,4 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use iced::{
     alignment::{Horizontal, Vertical},
     widget::{button, column, container, horizontal_space, row, space::Space, text, text_input},
