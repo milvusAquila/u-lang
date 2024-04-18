@@ -1533,6 +1533,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "grammar"
+version = "0.1.0"
+source = "git+https://github.com/milvusAquila/grammar#2856418a43d1093b7b2bb2a8143c348581bd405c"
+
+[[package]]
 name = "guillotiere"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3457,6 +3462,7 @@ version = "0.1.0"
 dependencies = [
  "async-std",
  "getrandom",
+ "grammar",
  "iced",
  "iced_web",
  "json",

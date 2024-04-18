@@ -10,6 +10,7 @@ tokio = { version = "1.36", features = ["rt"] }
 rfd = "0.14"
 json = "0.12.4"
 async-std = "1.12"
+grammar = { git = "https://github.com/milvusAquila/grammar" }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }

@@ -7,7 +7,6 @@ use iced::{
 use rand::{seq::SliceRandom, thread_rng};
 use std::{io, path::PathBuf, sync::Arc, vec};
 
-mod grammar;
 use grammar::*;
 mod settings;
 use settings::*;
