@@ -122,6 +122,7 @@ impl iced::Application for App {
                         self.total_score = (0., self.content.len());
                         self.current = Some(0);
                         self.last_score = 0.;
+                        self.error = None;
                         self.state = State::WaitUserAnswer;
                     }
                     Err(err) if err != Error::DialogClosed => self.error = Some(err),
@@ -286,7 +287,6 @@ async fn pick_file() -> Result<(PathBuf, Arc<([Lang; 2], Vec<Entry>)>), Error> {
         .add_filter("All files (*.*)", &["*"])
         .pick_file()
         .await;
-    // load_file(handle.path().to_owned()).await
     match opt_handle {
         Some(handle) => {
             let path = handle.path();
