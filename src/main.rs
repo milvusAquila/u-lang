@@ -2,12 +2,12 @@
 use iced::{
     alignment::{Horizontal, Vertical},
     widget::{
-        button, column, container, horizontal_space, pick_list, row, space::Space, text, text_input, toggler,
+        button, column, container, horizontal_space, row, space::Space, text, text_input, toggler,
     },
     Application, Command, Element, Length, Theme,
 };
 use rand::{seq::SliceRandom, thread_rng};
-use std::{io, path::PathBuf, sync::Arc, vec};
+use std::{path::PathBuf, sync::Arc, vec};
 
 use grammar::*;
 mod settings;
@@ -60,20 +60,21 @@ impl Default for App {
 #[derive(Debug, Clone)]
 enum Message {
     TextInputChanged(String),
-    FileOpened(Result<(PathBuf, Arc<String>), Error>),
+    OpenFile,
+    FileOpened(Result<(PathBuf, Arc<([Lang; 2], Vec<Entry>)>), Error>),
     Correction,
     Next,
     None,
-    OpenFile,
     OpenSettings,
     Start,
     ThemeSelected,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Error {
     IoError,
     DialogClosed,
+    ParseError,
 }
 
 #[derive(Debug)]
@@ -96,7 +97,10 @@ impl iced::Application for App {
     }
 
     fn title(&self) -> String {
-        String::from("Vocabulary")
+        match &self.file {
+            Some(path) => format!("{} — ULang ", path.to_str().unwrap_or("")),
+            None => String::from("ULang"),
+        }
     }
 
     fn update(&mut self, message: Message) -> Command<Message> {
@@ -105,11 +109,24 @@ impl iced::Application for App {
                 self.entry = value;
                 Command::none()
             }
+            Message::OpenFile => Command::perform(pick_file(), Message::FileOpened),
             Message::FileOpened(result) => {
-                if let Ok((path, contents)) = result {
-                    self.file = Some(path);
-                    // self.content = todo!();
-                };
+                match result {
+                    Ok((path, contents)) => {
+                        self.entry = String::new();
+                        self.file = Some(path);
+                        self.langs = contents.0.clone();
+                        let mut entries = contents.1.clone();
+                        entries.shuffle(&mut thread_rng());
+                        self.content = entries;
+                        self.total_score = (0., self.content.len());
+                        self.current = Some(0);
+                        self.last_score = 0.;
+                        self.state = State::WaitUserAnswer;
+                    }
+                    Err(err) if err != Error::DialogClosed => self.error = Some(err),
+                    _ => (),
+                }
                 Command::none()
             }
             Message::Correction => {
@@ -136,7 +153,6 @@ impl iced::Application for App {
                 Command::none()
             }
             Message::None => Command::none(),
-            Message::OpenFile => Command::perform(pick_file(), Message::FileOpened),
             Message::OpenSettings => Command::none(),
             Message::Start => {
                 self.state = State::WaitUserAnswer;
@@ -157,37 +173,11 @@ impl iced::Application for App {
             .iter())
         .max()
         .unwrap_or(&15) as u16
-            * 20;
+            * 10;
 
         let head_one = text(&self.langs[0]).width(max_len);
         let head_two = text(&self.langs[1]).width(max_len);
 
-        let mut first_row = row![head_one].padding(2);
-        if let State::WaitUserAnswer = self.state {
-            first_row = first_row.push(
-                text_input("Write your answer", &self.entry)
-                    .on_input(Message::TextInputChanged)
-                    .on_submit(match self.state {
-                        State::WaitUserAnswer => Message::Correction,
-                        State::Correcting => Message::Next,
-                        State::Starting => Message::Start,
-                        _ => Message::None,
-                    }),
-            );
-        }
-        if let State::Correcting = self.state {
-            first_row = first_row
-                .push(text(&self.entry))
-                .push_maybe(if self.current.is_some() && !self.entry.is_empty() {
-                    Some(Space::new(10, 0))
-                } else {
-                    None
-                })
-                .push_maybe(match &self.current {
-                    Some(nb) => Some(text(&self.content[*nb].get(0))),
-                    None => None,
-                });
-        }
         let known = text(match self.current {
             Some(nb) => self.content[nb].get(1),
             None => "".into(),
@@ -214,15 +204,53 @@ impl iced::Application for App {
         });
 
         let open = button("Open").on_press(Message::OpenFile);
-        let theme = toggler(Some("Theme".into()), self.dark_theme, |_| Message::ThemeSelected);
-        let settings = button("Settings").on_press(Message::OpenSettings);
+        let theme = toggler(Some("Theme".into()), self.dark_theme, |_| {
+            Message::ThemeSelected
+        });
+        // let settings = button("Settings").on_press(Message::OpenSettings);
 
-        let header = row![open, horizontal_space(), theme, settings].padding(5);
+        let header = row![open, horizontal_space(), theme /* settings */,].padding(5);
+        let error_log = text(match &self.error {
+            Some(err) => format!("{:?}: invalid file", err),
+            None => "".to_string(),
+        });
+
+        let mut first_row = row![head_one].padding(2);
+        match self.state {
+            State::WaitUserAnswer => {
+                first_row = first_row.push(
+                    text_input("Write your answer", &self.entry)
+                        .on_input(Message::TextInputChanged)
+                        .on_submit(match self.state {
+                            State::WaitUserAnswer => Message::Correction,
+                            State::Correcting => Message::Next,
+                            State::Starting => Message::Start,
+                            _ => Message::None,
+                        }),
+                );
+            }
+            State::Correcting => {
+                first_row = first_row
+                    .push(text(&self.entry))
+                    .push_maybe(if self.current.is_some() && !self.entry.is_empty() {
+                        Some(Space::new(10, 0))
+                    } else {
+                        None
+                    })
+                    .push_maybe(match &self.current {
+                        Some(nb) => Some(text(&self.content[*nb].get(0))),
+                        None => None,
+                    });
+            }
+            _ => (),
+        }
+        let second_row = row![head_two, known].padding(2);
+
         container(column![
             header,
             first_row,
             Space::new(Length::Fill, 10),
-            row![head_two, known].padding(2),
+            second_row,
             Space::new(Length::Fill, 10),
             row!(
                 horizontal_space(),
@@ -235,6 +263,7 @@ impl iced::Application for App {
             )
             .spacing(10)
             .padding(10),
+            error_log,
         ])
         .padding(10)
         .into()
@@ -249,10 +278,12 @@ impl iced::Application for App {
     }
 }
 
-// #[cfg(not(target_family = "wasm"))]
-async fn pick_file() -> Result<(PathBuf, Arc<String>), Error> {
+#[cfg(not(target_family = "wasm"))]
+async fn pick_file() -> Result<(PathBuf, Arc<([Lang; 2], Vec<Entry>)>), Error> {
     let opt_handle = rfd::AsyncFileDialog::new()
-        .set_title("Choose a text file...")
+        .set_title("Choose a json file...")
+        .add_filter("Json (*.json)", &["json"])
+        .add_filter("All files (*.*)", &["*"])
         .pick_file()
         .await;
     // load_file(handle.path().to_owned()).await
@@ -260,7 +291,10 @@ async fn pick_file() -> Result<(PathBuf, Arc<String>), Error> {
         Some(handle) => {
             let path = handle.path();
             match async_std::fs::read_to_string(path).await {
-                Ok(raw) => Ok((path.into(), Arc::new(raw))),
+                Ok(raw) => match parse(&raw) {
+                    Ok(data) => Ok((path.into(), Arc::new(data))),
+                    Err(_) => Err(Error::ParseError),
+                },
                 Err(_) => Err(Error::IoError),
             }
         }
