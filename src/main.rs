@@ -1,17 +1,19 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use iced::{
     alignment::{Horizontal, Vertical},
+    keyboard::{self, Key},
     widget::{
         button, column, container, horizontal_space, row, space::Space, text, text_input, toggler,
     },
     Application, Command, Element, Length, Theme,
 };
+use iced_aw::menu;
 use rand::{seq::SliceRandom, thread_rng};
 use std::{path::PathBuf, sync::Arc, vec};
 
 use grammar::*;
 mod settings;
-use settings::*;
+// use settings::*;
 
 fn main() -> iced::Result {
     App::run(iced::Settings::default())
@@ -29,6 +31,38 @@ struct App {
     last_score: f32,
     dark_theme: bool,
     total_score: (f32, usize),
+}
+
+impl App {
+    fn init(&mut self, mut content: Vec<Entry>) {
+        self.entry = String::new();
+        self.current = Some(0);
+        content.shuffle(&mut thread_rng());
+        self.content = content;
+        self.total_score = (0., self.content.len());
+        self.last_score = 0.;
+        self.state = State::WaitUserAnswer;
+    }
+    fn correct(&mut self) {
+        self.last_score = self.content[self.current.unwrap()].correct(&self.entry.trim().into());
+        self.total_score.0 += self.last_score;
+        self.state = State::Correcting;
+    }
+    fn next(&mut self) {
+                self.entry = String::new();
+                match self.current {
+                    Some(nb) => {
+                        self.current = if nb + 1 == self.content.len() {
+                            self.state = State::End;
+                            None
+                        } else {
+                            self.state = State::WaitUserAnswer;
+                            Some(nb + 1)
+                        }
+                    }
+                    None => (),
+                }
+    }
 }
 
 impl Default for App {
@@ -65,8 +99,9 @@ enum Message {
     Correction,
     Next,
     None,
-    OpenSettings,
+    // OpenSettings,
     Start,
+    Enter,
     ThemeSelected,
 }
 
@@ -81,9 +116,8 @@ enum Error {
 enum State {
     Correcting,
     WaitUserAnswer,
-    NotRunning,
-    Settings,
-    Starting,
+    // Settings,
+    End,
 }
 
 impl iced::Application for App {
@@ -103,6 +137,14 @@ impl iced::Application for App {
         }
     }
 
+    fn subscription(&self) -> iced::Subscription<Self::Message> {
+        keyboard::on_key_press(|key, modifiers| match key.as_ref() {
+            Key::Character("o") if modifiers.command() => Some(Message::OpenFile),
+            Key::Named(keyboard::key::Named::Enter) => Some(Message::Enter),
+            _ => None,
+        })
+    }
+
     fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::TextInputChanged(value) => {
@@ -112,50 +154,41 @@ impl iced::Application for App {
             Message::OpenFile => Command::perform(pick_file(), Message::FileOpened),
             Message::FileOpened(result) => {
                 match result {
-                    Ok((path, contents)) => {
-                        self.entry = String::new();
+                    Ok((path, content)) => {
+                        self.langs = content.0.clone();
+                        self.init(content.1.clone());
                         self.file = Some(path);
-                        self.langs = contents.0.clone();
-                        let mut entries = contents.1.clone();
-                        entries.shuffle(&mut thread_rng());
-                        self.content = entries;
-                        self.total_score = (0., self.content.len());
-                        self.current = Some(0);
-                        self.last_score = 0.;
                         self.error = None;
-                        self.state = State::WaitUserAnswer;
                     }
-                    Err(err) if err != Error::DialogClosed => self.error = Some(err),
+                    Err(Error::DialogClosed) => (),
+                    Err(err) => self.error = Some(err),
+                }
+                Command::none()
+            }
+            Message::Enter => {
+                match self.state {
+                    State::WaitUserAnswer => self.correct(),
+                    State::Correcting => self.next(),
                     _ => (),
                 }
                 Command::none()
             }
             Message::Correction => {
-                self.last_score =
-                    self.content[self.current.unwrap()].correct(&self.entry.trim().into());
-                self.total_score.0 += self.last_score;
-                self.state = State::Correcting;
+                self.correct();
                 Command::none()
             }
             Message::Next => {
-                self.entry = String::new();
-                match self.current {
-                    Some(nb) => {
-                        self.current = if nb + 1 == self.content.len() {
-                            self.state = State::NotRunning;
-                            None
-                        } else {
-                            self.state = State::WaitUserAnswer;
-                            Some(nb + 1)
-                        }
-                    }
-                    None => (),
-                }
+                self.next();
                 Command::none()
             }
             Message::None => Command::none(),
-            Message::OpenSettings => Command::none(),
+            // Message::OpenSettings => Command::none(),
             Message::Start => {
+                if let Some(_) = self.file {
+                    self.init(self.content.clone());
+                } else {
+                    self.init(App::default().content);
+                }
                 self.state = State::WaitUserAnswer;
                 Command::none()
             }
@@ -176,8 +209,8 @@ impl iced::Application for App {
         .unwrap_or(&15) as u16
             * 10;
 
-        let head_one = text(&self.langs[0]).width(max_len);
-        let head_two = text(&self.langs[1]).width(max_len);
+        let lang_one = text(&self.langs[0]).width(max_len);
+        let lang_two = text(&self.langs[1]).width(max_len);
 
         let known = text(match self.current {
             Some(nb) => self.content[nb].get(1),
@@ -192,15 +225,15 @@ impl iced::Application for App {
             self.total_score.1,
         ));
         let next_button = button(match self.state {
-            State::Starting => "Begin",
             State::Correcting => "Next",
             State::WaitUserAnswer => "Correct",
+            State::End => "Restart",
             _ => "",
         })
         .on_press(match self.state {
-            State::Starting => Message::Start,
             State::Correcting => Message::Next,
             State::WaitUserAnswer => Message::Correction,
+            State::End => Message::Start,
             _ => Message::None,
         });
 
@@ -210,24 +243,19 @@ impl iced::Application for App {
         });
         // let settings = button("Settings").on_press(Message::OpenSettings);
 
-        let header = row![open, horizontal_space(), theme /* settings */,].padding(5);
+        let header = row![open, horizontal_space(), theme /* settings */,]; //.padding(5);
         let error_log = text(match &self.error {
             Some(err) => format!("{:?}: invalid file", err),
             None => "".to_string(),
         });
 
-        let mut first_row = row![head_one].padding(2);
+        let mut first_row = row![lang_one].padding(2).height(40);
         match self.state {
             State::WaitUserAnswer => {
                 first_row = first_row.push(
                     text_input("Write your answer", &self.entry)
                         .on_input(Message::TextInputChanged)
-                        .on_submit(match self.state {
-                            State::WaitUserAnswer => Message::Correction,
-                            State::Correcting => Message::Next,
-                            State::Starting => Message::Start,
-                            _ => Message::None,
-                        }),
+                        .on_submit(Message::Correction),
                 );
             }
             State::Correcting => {
@@ -245,7 +273,7 @@ impl iced::Application for App {
             }
             _ => (),
         }
-        let second_row = row![head_two, known].padding(2);
+        let second_row = row![lang_two, known].padding(2).height(40);
 
         container(column![
             header,
@@ -253,7 +281,7 @@ impl iced::Application for App {
             Space::new(Length::Fill, 10),
             second_row,
             Space::new(Length::Fill, 10),
-            row!(
+            row![
                 horizontal_space(),
                 text("Score: ")
                     .vertical_alignment(Vertical::Center)
@@ -261,9 +289,8 @@ impl iced::Application for App {
                 score.horizontal_alignment(Horizontal::Right),
                 // Space::new(10, Length::Fill),
                 next_button,
-            )
-            .spacing(10)
-            .padding(10),
+            ]
+            .spacing(10),
             error_log,
         ])
         .padding(10)
