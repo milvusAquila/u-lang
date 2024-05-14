@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use iced::{
+    advanced::Widget,
     alignment::{Horizontal, Vertical},
     keyboard::{self, Key},
     widget::{
@@ -7,7 +8,7 @@ use iced::{
     },
     Application, Command, Element, Length, Theme,
 };
-use iced_aw::menu;
+use iced_aw::menu::{self, Item};
 use rand::{seq::SliceRandom, thread_rng};
 use std::{path::PathBuf, sync::Arc, vec};
 
@@ -49,19 +50,19 @@ impl App {
         self.state = State::Correcting;
     }
     fn next(&mut self) {
-                self.entry = String::new();
-                match self.current {
-                    Some(nb) => {
-                        self.current = if nb + 1 == self.content.len() {
-                            self.state = State::End;
-                            None
-                        } else {
-                            self.state = State::WaitUserAnswer;
-                            Some(nb + 1)
-                        }
-                    }
-                    None => (),
+        self.entry = String::new();
+        match self.current {
+            Some(nb) => {
+                self.current = if nb + 1 == self.content.len() {
+                    self.state = State::End;
+                    None
+                } else {
+                    self.state = State::WaitUserAnswer;
+                    Some(nb + 1)
                 }
+            }
+            None => (),
+        }
     }
 }
 
@@ -139,8 +140,8 @@ impl iced::Application for App {
 
     fn subscription(&self) -> iced::Subscription<Self::Message> {
         keyboard::on_key_press(|key, modifiers| match key.as_ref() {
-            Key::Character("o") if modifiers.command() => Some(Message::OpenFile),
-            Key::Named(keyboard::key::Named::Enter) => Some(Message::Enter),
+            Key::Character("o") if modifiers.command() => Some(Message::OpenFile), // Ctrl + o
+            Key::Named(keyboard::key::Named::Enter) => Some(Message::Enter),       // Enter
             _ => None,
         })
     }
@@ -241,9 +242,26 @@ impl iced::Application for App {
         let theme = toggler(Some("Theme".into()), self.dark_theme, |_| {
             Message::ThemeSelected
         });
-        // let settings = button("Settings").on_press(Message::OpenSettings);
 
-        let header = row![open, horizontal_space(), theme /* settings */,]; //.padding(5);
+        let menu_tpl = |items| {
+            menu::Menu::new(items)
+                .max_width(180.0)
+                .offset(5.0)
+                .spacing(5.0)
+        };
+
+        #[rustfmt::skip]
+        let header = iced_aw::menu_bar!(
+            (button("File"), {
+                let size = Widget::size(&open).width;
+                menu_tpl(iced_aw::menu_items!((open))).width(size)
+            })
+            (button("Settings"), {
+                let size = Widget::size(&theme).width;
+                menu_tpl(iced_aw::menu_items!((theme))).width(size)
+            })
+        );
+
         let error_log = text(match &self.error {
             Some(err) => format!("{:?}: invalid file", err),
             None => "".to_string(),
@@ -277,23 +295,25 @@ impl iced::Application for App {
 
         container(column![
             header,
-            first_row,
-            Space::new(Length::Fill, 10),
-            second_row,
-            Space::new(Length::Fill, 10),
-            row![
-                horizontal_space(),
-                text("Score: ")
-                    .vertical_alignment(Vertical::Center)
-                    .horizontal_alignment(Horizontal::Right),
-                score.horizontal_alignment(Horizontal::Right),
-                // Space::new(10, Length::Fill),
-                next_button,
+            column![
+                first_row,
+                Space::new(Length::Fill, 10),
+                second_row,
+                Space::new(Length::Fill, 10),
+                row![
+                    horizontal_space(),
+                    text("Score: ")
+                        .vertical_alignment(Vertical::Center)
+                        .horizontal_alignment(Horizontal::Right),
+                    score.horizontal_alignment(Horizontal::Right),
+                    // Space::new(10, Length::Fill),
+                    next_button,
+                ]
+                .spacing(10),
+                error_log,
             ]
-            .spacing(10),
-            error_log,
+            .padding(10)
         ])
-        .padding(10)
         .into()
     }
 
