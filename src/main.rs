@@ -45,7 +45,7 @@ impl App {
         self.state = State::WaitUserAnswer;
     }
     fn correct(&mut self) {
-        self.last_score = self.content[self.current.unwrap()].correct(&self.entry.trim().into());
+        self.last_score = self.content[self.current.unwrap()].correct(&self.entry.trim().into(), 0, &self.langs[0]);
         self.total_score.0 += self.last_score;
         self.state = State::Correcting;
     }
