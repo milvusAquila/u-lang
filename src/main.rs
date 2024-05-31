@@ -1,12 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use iced::{
     advanced::Widget,
-    alignment::{Horizontal, Vertical},
+    alignment::Horizontal,
     keyboard::{self, Key},
     theme,
-    widget::{
-        button, column, container, horizontal_space, row, space::Space, text, text_input, toggler,
-    },
+    widget::{button, column, container, row, space::Space, text, text_input, toggler},
     Application, Command, Element, Length, Theme,
 };
 use iced_aw::menu::{self, Item};
@@ -229,13 +227,6 @@ impl iced::Application for App {
             None => "".into(),
         });
 
-        let score = text(&format!(
-            "{} / 1\n{} / {}\n{}",
-            self.last_score,
-            self.total_score.0,
-            self.current.unwrap_or(0) + 1,
-            self.total_score.1,
-        ));
         let next_button = button(match self.state {
             State::Correcting => "Next",
             State::WaitUserAnswer => "Correct",
@@ -320,13 +311,31 @@ impl iced::Application for App {
                 second_row,
                 Space::new(Length::Fill, 10),
                 row![
-                    horizontal_space(),
-                    text("Current \nProgress \nTotal ")
-                        .vertical_alignment(Vertical::Center)
-                        .horizontal_alignment(Horizontal::Right),
-                    score
-                        .vertical_alignment(Vertical::Center)
-                        .horizontal_alignment(Horizontal::Right),
+                    Space::new(Length::FillPortion(10), Length::Fill),
+                    column![
+                        row![
+                            text("Current ").horizontal_alignment(Horizontal::Left),
+                            Space::new(Length::FillPortion(3), 10),
+                            text(format!("{} / 1", self.last_score))
+                                .horizontal_alignment(Horizontal::Right),
+                        ],
+                        row![
+                            text("Progress ").horizontal_alignment(Horizontal::Left),
+                            Space::new(Length::FillPortion(3), 10),
+                            text(format!(
+                                "{} / {}",
+                                self.total_score.0,
+                                self.current.unwrap_or(0) + 1
+                            ))
+                            .horizontal_alignment(Horizontal::Right),
+                        ],
+                        row![
+                            text("Total ").horizontal_alignment(Horizontal::Left),
+                            Space::new(Length::FillPortion(3), 10),
+                            text(format!("{}", self.total_score.1))
+                                .horizontal_alignment(Horizontal::Right),
+                        ],
+                    ],
                     // Space::new(10, Length::Fill),
                     next_button,
                 ]
