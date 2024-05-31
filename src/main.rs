@@ -3,6 +3,7 @@ use iced::{
     advanced::Widget,
     alignment::{Horizontal, Vertical},
     keyboard::{self, Key},
+    theme,
     widget::{
         button, column, container, horizontal_space, row, space::Space, text, text_input, toggler,
     },
@@ -14,10 +15,16 @@ use std::{path::PathBuf, sync::Arc, vec};
 
 use grammar::*;
 mod settings;
-// use settings::*;
+mod style;
 
 fn main() -> iced::Result {
-    App::run(iced::Settings::default())
+    App::run(iced::Settings {
+        window: iced::window::Settings {
+            size: iced::Size::new(600., 250.),
+            ..Default::default()
+        },
+        ..Default::default()
+    })
 }
 
 #[derive(Debug)]
@@ -45,7 +52,11 @@ impl App {
         self.state = State::WaitUserAnswer;
     }
     fn correct(&mut self) {
-        self.last_score = self.content[self.current.unwrap()].correct(&self.entry.trim().into(), 0, &self.langs[0]);
+        self.last_score = self.content[self.current.unwrap()].correct(
+            &self.entry.trim().into(),
+            0,
+            &self.langs[0],
+        );
         self.total_score.0 += self.last_score;
         self.state = State::Correcting;
     }
@@ -219,7 +230,7 @@ impl iced::Application for App {
         });
 
         let score = text(&format!(
-            "{} / 1\n{} / {} ({})",
+            "{} / 1\n{} / {}\n{}",
             self.last_score,
             self.total_score.0,
             self.current.unwrap_or(0) + 1,
@@ -238,7 +249,11 @@ impl iced::Application for App {
             _ => Message::None,
         });
 
-        let open = button("Open").on_press(Message::OpenFile);
+        let open = button("Open")
+            .on_press(Message::OpenFile)
+            .style(theme::Button::Custom(Box::new(style::Header::from(
+                &self.theme(),
+            ))));
         let theme = toggler(Some("Theme".into()), self.dark_theme, |_| {
             Message::ThemeSelected
         });
@@ -252,11 +267,15 @@ impl iced::Application for App {
 
         #[rustfmt::skip]
         let header = iced_aw::menu_bar!(
-            (button("File"), {
+            (button("File")
+                .style(theme::Button::Custom(Box::new(style::Header::from(&self.theme())))),
+            {
                 let size = Widget::size(&open).width;
                 menu_tpl(iced_aw::menu_items!((open))).width(size)
             })
-            (button("Settings"), {
+            (button("Settings")
+                .style(theme::Button::Custom(Box::new(style::Header::from(&self.theme())))),
+            {
                 let size = Widget::size(&theme).width;
                 menu_tpl(iced_aw::menu_items!((theme))).width(size)
             })
@@ -302,10 +321,12 @@ impl iced::Application for App {
                 Space::new(Length::Fill, 10),
                 row![
                     horizontal_space(),
-                    text("Score: ")
+                    text("Current \nProgress \nTotal ")
                         .vertical_alignment(Vertical::Center)
                         .horizontal_alignment(Horizontal::Right),
-                    score.horizontal_alignment(Horizontal::Right),
+                    score
+                        .vertical_alignment(Vertical::Center)
+                        .horizontal_alignment(Horizontal::Right),
                     // Space::new(10, Length::Fill),
                     next_button,
                 ]
