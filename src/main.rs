@@ -5,7 +5,7 @@ use iced::{
     keyboard::{self, Key},
     theme,
     widget::{button, column, container, row, space::Space, text, text_input, toggler},
-    Application, Command, Element, Length, Theme,
+    Application, Command, Element, Length, Pixels, Theme,
 };
 use iced_aw::menu::{self, Item};
 use rand::{seq::SliceRandom, thread_rng};
@@ -18,7 +18,8 @@ mod style;
 fn main() -> iced::Result {
     App::run(iced::Settings {
         window: iced::window::Settings {
-            size: iced::Size::new(600., 250.),
+            size: iced::Size::new(600., 235.),
+            min_size: Some(iced::Size::new(600., 235.)),
             ..Default::default()
         },
         ..Default::default()
@@ -37,6 +38,7 @@ struct App {
     last_score: f32,
     dark_theme: bool,
     total_score: (f32, usize),
+    text_size: Pixels,
 }
 
 impl App {
@@ -97,6 +99,7 @@ impl Default for App {
             state: State::WaitUserAnswer,
             last_score: 0.,
             dark_theme: true,
+            text_size: Pixels(16.),
         }
     }
 }
@@ -216,23 +219,27 @@ impl iced::Application for App {
             .map(|lang| format!("{}", lang).len())
             .iter())
         .max()
-        .unwrap_or(&15) as u16
-            * 10;
+        .unwrap_or(&15) as f32
+            * self.text_size.0;
 
-        let lang_one = text(&self.langs[0]).width(max_len);
-        let lang_two = text(&self.langs[1]).width(max_len);
+        let lang_one = text(&self.langs[0]).size(self.text_size).width(max_len);
+        let lang_two = text(&self.langs[1]).size(self.text_size).width(max_len);
 
         let known = text(match self.current {
             Some(nb) => self.content[nb].get(1),
             None => "".into(),
-        });
-
-        let next_button = button(match self.state {
-            State::Correcting => "Next",
-            State::WaitUserAnswer => "Correct",
-            State::End => "Restart",
-            _ => "",
         })
+        .size(self.text_size);
+
+        let next_button = button(
+            text(match self.state {
+                State::Correcting => "Next",
+                State::WaitUserAnswer => "Correct",
+                State::End => "Restart",
+                _ => "",
+            })
+            .size(self.text_size),
+        )
         .on_press(match self.state {
             State::Correcting => Message::Next,
             State::WaitUserAnswer => Message::Correction,
@@ -240,14 +247,15 @@ impl iced::Application for App {
             _ => Message::None,
         });
 
-        let open = button("Open")
+        let open = button(text("Open").size(self.text_size))
             .on_press(Message::OpenFile)
             .style(theme::Button::Custom(Box::new(style::Header::from(
                 &self.theme(),
             ))));
         let theme = toggler(Some("Theme".into()), self.dark_theme, |_| {
             Message::ThemeSelected
-        });
+        })
+        .size(self.text_size);
 
         let menu_tpl = |items| {
             menu::Menu::new(items)
@@ -258,13 +266,13 @@ impl iced::Application for App {
 
         #[rustfmt::skip]
         let header = iced_aw::menu_bar!(
-            (button("File")
+            (button(text("File").size(self.text_size))
                 .style(theme::Button::Custom(Box::new(style::Header::from(&self.theme())))),
             {
                 let size = Widget::size(&open).width;
                 menu_tpl(iced_aw::menu_items!((open))).width(size)
             })
-            (button("Settings")
+            (button(text("Settings").size(self.text_size))
                 .style(theme::Button::Custom(Box::new(style::Header::from(&self.theme())))),
             {
                 let size = Widget::size(&theme).width;
@@ -275,27 +283,30 @@ impl iced::Application for App {
         let error_log = text(match &self.error {
             Some(err) => format!("{:?}: invalid file", err),
             None => "".to_string(),
-        });
+        })
+        .size(self.text_size);
 
         let mut first_row = row![lang_one].padding(2).height(40);
         match self.state {
             State::WaitUserAnswer => {
                 first_row = first_row.push(
                     text_input("Write your answer", &self.entry)
+                        .size(self.text_size)
+                        .line_height(iced::widget::text::LineHeight::Relative(1.))
                         .on_input(Message::TextInputChanged)
                         .on_submit(Message::Correction),
                 );
             }
             State::Correcting => {
                 first_row = first_row
-                    .push(text(&self.entry))
+                    .push(text(&self.entry).size(self.text_size))
                     .push_maybe(if self.current.is_some() && !self.entry.is_empty() {
                         Some(Space::new(10, 0))
                     } else {
                         None
                     })
                     .push_maybe(match &self.current {
-                        Some(nb) => Some(text(&self.content[*nb].get(0))),
+                        Some(nb) => Some(text(&self.content[*nb].get(0)).size(self.text_size)),
                         None => None,
                     });
             }
@@ -314,25 +325,34 @@ impl iced::Application for App {
                     Space::new(Length::FillPortion(10), Length::Fill),
                     column![
                         row![
-                            text("Current ").horizontal_alignment(Horizontal::Left),
+                            text("Current ")
+                                .size(self.text_size)
+                                .horizontal_alignment(Horizontal::Left),
                             Space::new(Length::FillPortion(3), 10),
                             text(format!("{} / 1", self.last_score))
+                                .size(self.text_size)
                                 .horizontal_alignment(Horizontal::Right),
                         ],
                         row![
-                            text("Progress ").horizontal_alignment(Horizontal::Left),
+                            text("Progress ")
+                                .size(self.text_size)
+                                .horizontal_alignment(Horizontal::Left),
                             Space::new(Length::FillPortion(3), 10),
                             text(format!(
                                 "{} / {}",
                                 self.total_score.0,
                                 self.current.unwrap_or(0) + 1
                             ))
+                            .size(self.text_size)
                             .horizontal_alignment(Horizontal::Right),
                         ],
                         row![
-                            text("Total ").horizontal_alignment(Horizontal::Left),
+                            text("Total ")
+                                .size(self.text_size)
+                                .horizontal_alignment(Horizontal::Left),
                             Space::new(Length::FillPortion(3), 10),
                             text(format!("{}", self.total_score.1))
+                                .size(self.text_size)
                                 .horizontal_alignment(Horizontal::Right),
                         ],
                     ],
