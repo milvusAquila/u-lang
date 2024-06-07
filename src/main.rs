@@ -4,10 +4,11 @@ use iced::{
     alignment::Horizontal,
     keyboard::{self, Key},
     theme,
-    widget::{button, column, container, row, space::Space, text, text_input, toggler},
-    Application, Command, Element, Length, Pixels, Theme,
+    widget::{button, column, container, row, space::Space, text, text_input},
+    Application, Command, Element, Length, Pixels, Size, Theme,
 };
 use iced_aw::menu::{self, Item};
+use iced_aw::{grid, grid_row};
 use rand::{seq::SliceRandom, thread_rng};
 use std::{path::PathBuf, sync::Arc, vec};
 
@@ -18,8 +19,8 @@ mod style;
 fn main() -> iced::Result {
     App::run(iced::Settings {
         window: iced::window::Settings {
-            size: iced::Size::new(600., 235.),
-            min_size: Some(iced::Size::new(600., 235.)),
+            size: Size::new(600., 235.),
+            min_size: Some(Size::new(600., 235.)),
             ..Default::default()
         },
         ..Default::default()
@@ -38,7 +39,7 @@ struct App {
     last_score: f32,
     dark_theme: bool,
     total_score: (f32, usize),
-    text_size: Pixels,
+    font_size: Pixels,
 }
 
 impl App {
@@ -99,7 +100,7 @@ impl Default for App {
             state: State::WaitUserAnswer,
             last_score: 0.,
             dark_theme: true,
-            text_size: Pixels(16.),
+            font_size: Pixels(16.),
         }
     }
 }
@@ -112,10 +113,10 @@ enum Message {
     Correction,
     Next,
     None,
-    // OpenSettings,
     Start,
     Enter,
     ThemeSelected,
+    TextFontChanged(f32),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -129,7 +130,6 @@ enum Error {
 enum State {
     Correcting,
     WaitUserAnswer,
-    // Settings,
     End,
 }
 
@@ -195,7 +195,6 @@ impl iced::Application for App {
                 Command::none()
             }
             Message::None => Command::none(),
-            // Message::OpenSettings => Command::none(),
             Message::Start => {
                 if let Some(_) = self.file {
                     self.init(self.content.clone());
@@ -209,27 +208,22 @@ impl iced::Application for App {
                 self.dark_theme = !self.dark_theme;
                 Command::none()
             }
+            Message::TextFontChanged(new_size) => {
+                self.font_size.0 = new_size;
+                Command::none()
+            }
         }
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let max_len = *(self
-            .langs
-            .clone()
-            .map(|lang| format!("{}", lang).len())
-            .iter())
-        .max()
-        .unwrap_or(&15) as f32
-            * self.text_size.0;
-
-        let lang_one = text(&self.langs[0]).size(self.text_size).width(max_len);
-        let lang_two = text(&self.langs[1]).size(self.text_size).width(max_len);
+        let lang_one = text(&self.langs[0]).size(self.font_size); //.width(max_len);
+        let lang_two = text(&self.langs[1]).size(self.font_size); //.width(max_len);
 
         let known = text(match self.current {
             Some(nb) => self.content[nb].get(1),
             None => "".into(),
         })
-        .size(self.text_size);
+        .size(self.font_size);
 
         let next_button = button(
             text(match self.state {
@@ -238,7 +232,7 @@ impl iced::Application for App {
                 State::End => "Restart",
                 _ => "",
             })
-            .size(self.text_size),
+            .size(self.font_size),
         )
         .on_press(match self.state {
             State::Correcting => Message::Next,
@@ -247,15 +241,11 @@ impl iced::Application for App {
             _ => Message::None,
         });
 
-        let open = button(text("Open").size(self.text_size))
+        let open = button(text("Open").size(self.font_size))
             .on_press(Message::OpenFile)
             .style(theme::Button::Custom(Box::new(style::Header::from(
                 &self.theme(),
             ))));
-        let theme = toggler(Some("Theme".into()), self.dark_theme, |_| {
-            Message::ThemeSelected
-        })
-        .size(self.text_size);
 
         let menu_tpl = |items| {
             menu::Menu::new(items)
@@ -266,17 +256,16 @@ impl iced::Application for App {
 
         #[rustfmt::skip]
         let header = iced_aw::menu_bar!(
-            (button(text("File").size(self.text_size))
+            (button(text("File").size(self.font_size))
                 .style(theme::Button::Custom(Box::new(style::Header::from(&self.theme())))),
             {
                 let size = Widget::size(&open).width;
                 menu_tpl(iced_aw::menu_items!((open))).width(size)
             })
-            (button(text("Settings").size(self.text_size))
+            (button(text("Settings").size(self.font_size))
                 .style(theme::Button::Custom(Box::new(style::Header::from(&self.theme())))),
             {
-                let size = Widget::size(&theme).width;
-                menu_tpl(iced_aw::menu_items!((theme))).width(size)
+                    self.view_settings()
             })
         );
 
@@ -284,58 +273,54 @@ impl iced::Application for App {
             Some(err) => format!("{:?}: invalid file", err),
             None => "".to_string(),
         })
-        .size(self.text_size);
+        .size(self.font_size);
 
-        let mut first_row = row![lang_one].padding(2).height(40);
+        let mut first_row = grid_row![lang_one]; //.padding(2).height(40);
         match self.state {
             State::WaitUserAnswer => {
                 first_row = first_row.push(
                     text_input("Write your answer", &self.entry)
-                        .size(self.text_size)
+                        .size(self.font_size)
                         .line_height(iced::widget::text::LineHeight::Relative(1.))
                         .on_input(Message::TextInputChanged)
                         .on_submit(Message::Correction),
                 );
             }
             State::Correcting => {
-                first_row = first_row
-                    .push(text(&self.entry).size(self.text_size))
-                    .push_maybe(if self.current.is_some() && !self.entry.is_empty() {
-                        Some(Space::new(10, 0))
-                    } else {
-                        None
-                    })
-                    .push_maybe(match &self.current {
-                        Some(nb) => Some(text(&self.content[*nb].get(0)).size(self.text_size)),
-                        None => None,
-                    });
+                first_row = first_row.push(text(&self.entry).size(self.font_size));
+                if self.current.is_some() && !self.entry.is_empty() {
+                    first_row = first_row.push(Space::new(10, 0));
+                }
+                if let Some(nb) = &self.current {
+                    first_row = first_row.push(text(&self.content[*nb].get(0)).size(self.font_size))
+                }
             }
             _ => (),
         }
-        let second_row = row![lang_two, known].padding(2).height(40);
+        let second_row = grid_row![lang_two, known]; //.padding(2).height(40);
 
         container(column![
             header,
-            column![
+            grid![
                 first_row,
-                Space::new(Length::Fill, 10),
+                // Space::new(Length::Fill, 10),
                 second_row,
-                Space::new(Length::Fill, 10),
-                row![
+                // Space::new(Length::Fill, 10),
+                grid_row![
                     Space::new(Length::FillPortion(10), Length::Fill),
                     column![
                         row![
                             text("Current ")
-                                .size(self.text_size)
+                                .size(self.font_size)
                                 .horizontal_alignment(Horizontal::Left),
                             Space::new(Length::FillPortion(3), 10),
                             text(format!("{} / 1", self.last_score))
-                                .size(self.text_size)
+                                .size(self.font_size)
                                 .horizontal_alignment(Horizontal::Right),
                         ],
                         row![
                             text("Progress ")
-                                .size(self.text_size)
+                                .size(self.font_size)
                                 .horizontal_alignment(Horizontal::Left),
                             Space::new(Length::FillPortion(3), 10),
                             text(format!(
@@ -343,26 +328,26 @@ impl iced::Application for App {
                                 self.total_score.0,
                                 self.current.unwrap_or(0) + 1
                             ))
-                            .size(self.text_size)
+                            .size(self.font_size)
                             .horizontal_alignment(Horizontal::Right),
                         ],
                         row![
                             text("Total ")
-                                .size(self.text_size)
+                                .size(self.font_size)
                                 .horizontal_alignment(Horizontal::Left),
                             Space::new(Length::FillPortion(3), 10),
                             text(format!("{}", self.total_score.1))
-                                .size(self.text_size)
+                                .size(self.font_size)
                                 .horizontal_alignment(Horizontal::Right),
                         ],
                     ],
                     // Space::new(10, Length::Fill),
                     next_button,
-                ]
-                .spacing(10),
-                error_log,
+                ],
+                // .spacing(10),
+                grid_row![error_log],
             ]
-            .padding(10)
+            // .padding(10)
         ])
         .into()
     }
