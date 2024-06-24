@@ -7,6 +7,7 @@ use iced::{
     Alignment, Application, Command, Element, Length, Pixels, Size, Theme,
 };
 use iced_aw::menu::{self, Item};
+use iced_aw::{grid, grid_row};
 use rand::{seq::SliceRandom, thread_rng};
 use std::{path::PathBuf, sync::Arc, vec};
 
@@ -90,7 +91,7 @@ impl Default for App {
         ];
         default_content.shuffle(&mut thread_rng());
         Self {
-            debug_layout: true,
+            debug_layout: false,
             total_score: (0., default_content.len()),
             content: default_content,
             current: Some(0),
@@ -276,6 +277,8 @@ impl iced::Application for App {
         // End declatating widgets
 
         // Grouping widgets
+
+        // Header
         #[rustfmt::skip]
         let header = iced_aw::menu_bar!(
             (button(text("File").size(self.font_size))
@@ -292,31 +295,35 @@ impl iced::Application for App {
             })
         ).padding(3.0);
 
-        let mut first_row = row![lang_one];
+        // Main
+        let mut variable = row![].width(self.font_size.0 * 20.0);
         match self.state {
             State::WaitUserAnswer => {
-                first_row = first_row.push(
+                variable = variable.push(
                     text_input("Write your answer", &self.entry)
                         .size(self.font_size)
-                        .line_height(iced::widget::text::LineHeight::Relative(1.))
+                        .line_height(iced::widget::text::LineHeight::Relative(1.0))
                         .on_input(Message::TextInputChanged)
                         .on_submit(Message::Correction),
                 );
             }
             State::Correcting => {
-                first_row = first_row.push(text(&self.entry).size(self.font_size));
+                variable = variable.push(text(&self.entry).size(self.font_size));
                 if self.current.is_some() && !self.entry.is_empty() {
-                    first_row = first_row.push(Space::new(10, 0));
+                    variable = variable.push(Space::new(10, 0));
                 }
                 if let Some(nb) = &self.current {
-                    first_row = first_row.push(text(&self.content[*nb].get(0)).size(self.font_size))
+                    variable = variable.push(text(&self.content[*nb].get(0)).size(self.font_size))
                 }
             }
             _ => (),
         }
 
-        let second_row = row![lang_two, known];
+        let main = grid!(grid_row!(lang_one, variable), grid_row!(lang_two, known))
+            .spacing(self.spacing)
+            .padding(self.spacing);
 
+        // Score
         let score_header = column![
             text("Current ").size(self.font_size),
             text("Progress ").size(self.font_size),
@@ -337,11 +344,10 @@ impl iced::Application for App {
             score_value = score_value.push(text(i).size(self.font_size))
         }
 
-        // Final grouping
+        // Final
         let grid = column![
             row![header],
-            first_row.spacing(self.spacing),
-            second_row.spacing(self.spacing),
+            main,
             row![
                 Space::new(Length::FillPortion(10), Length::Fill),
                 score_header,

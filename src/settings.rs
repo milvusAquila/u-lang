@@ -7,7 +7,7 @@ impl App {
     pub fn view_settings(&self) -> menu::Menu<Message, Theme, iced::Renderer> {
         let menu_tpl = |items| {
             menu::Menu::new(items)
-                .max_width(180.0)
+                .max_width(11.0 * self.font_size.0)
                 .offset(5.0)
                 .spacing(5.0)
         };
@@ -16,7 +16,8 @@ impl App {
             toggler(Some("Theme".into()), self.dark_theme, |_| {
                 Message::ThemeSelected
             })
-            .size(self.font_size);
+            .size(self.font_size)
+            .text_size(self.font_size);
 
         let font_size_header = text("Text_size").size(self.font_size);
         let font_size_slidder = slider(10.0..=50.0, self.font_size.0, Message::TextFontChanged);
@@ -26,7 +27,9 @@ impl App {
 
         let debug_layout = toggler(Some("Debug layout".into()), self.debug_layout, |_| {
             Message::DebugToggle
-        });
+        })
+        .size(self.font_size)
+        .text_size(self.font_size);
 
         #[rustfmt::skip]
         let settings = menu_tpl(iced_aw::menu_items!(
