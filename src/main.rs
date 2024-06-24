@@ -8,7 +8,6 @@ use iced::{
     Application, Command, Element, Length, Pixels, Size, Theme,
 };
 use iced_aw::menu::{self, Item};
-use iced_aw::{grid, grid_row};
 use rand::{seq::SliceRandom, thread_rng};
 use std::{path::PathBuf, sync::Arc, vec};
 
@@ -29,6 +28,7 @@ fn main() -> iced::Result {
 
 #[derive(Debug)]
 struct App {
+    debug_layout: bool,
     content: Vec<Entry>,
     current: Option<usize>,
     entry: String,
@@ -40,6 +40,7 @@ struct App {
     dark_theme: bool,
     total_score: (f32, usize),
     font_size: Pixels,
+    spacing: f32,
 }
 
 impl App {
@@ -90,6 +91,7 @@ impl Default for App {
         ];
         default_content.shuffle(&mut thread_rng());
         Self {
+            debug_layout: true,
             total_score: (0., default_content.len()),
             content: default_content,
             current: Some(0),
@@ -101,22 +103,25 @@ impl Default for App {
             last_score: 0.,
             dark_theme: true,
             font_size: Pixels(16.),
+            spacing: 5.0,
         }
     }
 }
 
 #[derive(Debug, Clone)]
 enum Message {
+    DebugToggle,
     TextInputChanged(String),
     OpenFile,
     FileOpened(Result<(PathBuf, Arc<([Lang; 2], Vec<Entry>)>), Error>),
     Correction,
     Next,
-    None,
+    // None,
     Start,
     Enter,
     ThemeSelected,
     TextFontChanged(f32),
+    SpacingChanged(f32),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -160,6 +165,10 @@ impl iced::Application for App {
 
     fn update(&mut self, message: Message) -> Command<Message> {
         match message {
+            Message::DebugToggle => {
+                self.debug_layout = !self.debug_layout;
+                Command::none()
+            }
             Message::TextInputChanged(value) => {
                 self.entry = value;
                 Command::none()
@@ -194,7 +203,7 @@ impl iced::Application for App {
                 self.next();
                 Command::none()
             }
-            Message::None => Command::none(),
+            // Message::None => Command::none(),
             Message::Start => {
                 if let Some(_) = self.file {
                     self.init(self.content.clone());
@@ -212,12 +221,17 @@ impl iced::Application for App {
                 self.font_size.0 = new_size;
                 Command::none()
             }
+            Message::SpacingChanged(new_spacing) => {
+                self.spacing = new_spacing;
+                Command::none()
+            }
         }
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let lang_one = text(&self.langs[0]).size(self.font_size); //.width(max_len);
-        let lang_two = text(&self.langs[1]).size(self.font_size); //.width(max_len);
+        // Declarating widgets
+        let lang_one = text(&self.langs[0]).size(self.font_size);
+        let lang_two = text(&self.langs[1]).size(self.font_size);
 
         let known = text(match self.current {
             Some(nb) => self.content[nb].get(1),
@@ -230,15 +244,16 @@ impl iced::Application for App {
                 State::Correcting => "Next",
                 State::WaitUserAnswer => "Correct",
                 State::End => "Restart",
-                _ => "",
+                // _ => "",
             })
-            .size(self.font_size),
+            .size(self.font_size)
+            .width(self.font_size * 4.0),
         )
         .on_press(match self.state {
             State::Correcting => Message::Next,
             State::WaitUserAnswer => Message::Correction,
             State::End => Message::Start,
-            _ => Message::None,
+            // _ => Message::None,
         });
 
         let open = button(text("Open").size(self.font_size))
@@ -254,10 +269,19 @@ impl iced::Application for App {
                 .spacing(5.0)
         };
 
+        let error_log = text(match &self.error {
+            Some(err) => format!("{:?}: invalid file", err),
+            None => "".to_string(),
+        })
+        .size(self.font_size);
+        // End declatating widgets
+
+        // Grouping widgets
         #[rustfmt::skip]
         let header = iced_aw::menu_bar!(
             (button(text("File").size(self.font_size))
-                .style(theme::Button::Custom(Box::new(style::Header::from(&self.theme())))),
+                .style(theme::Button::Custom(Box::new(style::Header::from(&self.theme())))), // see
+                // in src/style.rs
             {
                 let size = Widget::size(&open).width;
                 menu_tpl(iced_aw::menu_items!((open))).width(size)
@@ -265,17 +289,11 @@ impl iced::Application for App {
             (button(text("Settings").size(self.font_size))
                 .style(theme::Button::Custom(Box::new(style::Header::from(&self.theme())))),
             {
-                    self.view_settings()
+                self.view_settings() // see in src/settings.rs
             })
-        );
+        ).padding(3.0);
 
-        let error_log = text(match &self.error {
-            Some(err) => format!("{:?}: invalid file", err),
-            None => "".to_string(),
-        })
-        .size(self.font_size);
-
-        let mut first_row = grid_row![lang_one]; //.padding(2).height(40);
+        let mut first_row = row![lang_one];
         match self.state {
             State::WaitUserAnswer => {
                 first_row = first_row.push(
@@ -297,59 +315,72 @@ impl iced::Application for App {
             }
             _ => (),
         }
-        let second_row = grid_row![lang_two, known]; //.padding(2).height(40);
 
-        container(column![
-            header,
-            grid![
-                first_row,
-                // Space::new(Length::Fill, 10),
-                second_row,
-                // Space::new(Length::Fill, 10),
-                grid_row![
-                    Space::new(Length::FillPortion(10), Length::Fill),
-                    column![
-                        row![
-                            text("Current ")
-                                .size(self.font_size)
-                                .horizontal_alignment(Horizontal::Left),
-                            Space::new(Length::FillPortion(3), 10),
-                            text(format!("{} / 1", self.last_score))
-                                .size(self.font_size)
-                                .horizontal_alignment(Horizontal::Right),
-                        ],
-                        row![
-                            text("Progress ")
-                                .size(self.font_size)
-                                .horizontal_alignment(Horizontal::Left),
-                            Space::new(Length::FillPortion(3), 10),
-                            text(format!(
-                                "{} / {}",
-                                self.total_score.0,
-                                self.current.unwrap_or(0) + 1
-                            ))
-                            .size(self.font_size)
-                            .horizontal_alignment(Horizontal::Right),
-                        ],
-                        row![
-                            text("Total ")
-                                .size(self.font_size)
-                                .horizontal_alignment(Horizontal::Left),
-                            Space::new(Length::FillPortion(3), 10),
-                            text(format!("{}", self.total_score.1))
-                                .size(self.font_size)
-                                .horizontal_alignment(Horizontal::Right),
-                        ],
-                    ],
-                    // Space::new(10, Length::Fill),
-                    next_button,
-                ],
-                // .spacing(10),
-                grid_row![error_log],
+        let second_row = row![lang_two, known];
+
+        let score_section = column![
+            row![
+                text("Current ")
+                    .size(self.font_size)
+                    .horizontal_alignment(Horizontal::Left),
+                Space::new(Length::FillPortion(3), 10),
+                text(format!("{} / 1", self.last_score))
+                    .size(self.font_size)
+                    .horizontal_alignment(Horizontal::Right),
             ]
-            // .padding(10)
-        ])
-        .into()
+            .spacing(self.spacing / 2.0),
+            row![
+                text("Progress ")
+                    .size(self.font_size)
+                    .horizontal_alignment(Horizontal::Left),
+                Space::new(Length::FillPortion(3), 10),
+                text(format!(
+                    "{} / {}",
+                    self.total_score.0,
+                    self.current.unwrap_or(0) + 1
+                ))
+                .size(self.font_size)
+                .horizontal_alignment(Horizontal::Right),
+            ]
+            .spacing(self.spacing / 2.0),
+            row![
+                text("Total ")
+                    .size(self.font_size)
+                    .horizontal_alignment(Horizontal::Left),
+                Space::new(Length::FillPortion(3), 10),
+                text(format!("{}", self.total_score.1))
+                    .size(self.font_size)
+                    .horizontal_alignment(Horizontal::Right),
+            ]
+            .spacing(self.spacing / 2.0),
+        ]
+        .spacing(self.spacing / 2.0);
+
+        // Final grouping
+        let grid = column![
+            row![header],
+            first_row.spacing(self.spacing),
+            second_row.spacing(self.spacing),
+            row![
+                Space::new(Length::FillPortion(10), Length::Fill),
+                score_section,
+                Space::new(10, Length::Fill),
+                next_button,
+            ]
+            .spacing(self.spacing),
+            row![error_log].spacing(self.spacing),
+        ]
+        .spacing(self.spacing);
+        let mut contents = Element::from(grid);
+        if self.debug_layout {
+            contents = contents.explain(iced::Color::WHITE);
+        }
+        container(contents)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x()
+            .center_y()
+            .into()
     }
 
     fn theme(&self) -> Theme {

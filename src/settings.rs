@@ -1,7 +1,4 @@
-use iced::{
-    advanced::Widget,
-    widget::{slider, toggler},
-};
+use iced::widget::{slider, text, toggler};
 use iced_aw::menu;
 
 use crate::{App, Message, Theme};
@@ -20,9 +17,26 @@ impl App {
                 Message::ThemeSelected
             })
             .size(self.font_size);
-        let text_size = slider(10.0..=50., self.font_size.0, Message::TextFontChanged);
 
-        let size = Widget::size(&theme).width;
-        menu_tpl(iced_aw::menu_items!((theme)(text_size))).width(size)
+        let font_size_header = text("Text_size").size(self.font_size);
+        let font_size_slidder = slider(10.0..=50.0, self.font_size.0, Message::TextFontChanged);
+
+        let spacing_header = text("Spacing").size(self.font_size);
+        let spacing_slider = slider(0.0..=20.0, self.spacing, Message::SpacingChanged);
+
+        let debug_layout = toggler(Some("Debug layout".into()), self.debug_layout, |_| {
+            Message::DebugToggle
+        });
+
+        #[rustfmt::skip]
+        let settings = menu_tpl(iced_aw::menu_items!(
+            (theme)
+            (font_size_header)
+            (font_size_slidder)
+            (spacing_header)
+            (spacing_slider)
+            (debug_layout)
+        ));
+        settings
     }
 }
