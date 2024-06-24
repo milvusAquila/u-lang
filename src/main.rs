@@ -1,11 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use iced::{
     advanced::Widget,
-    alignment::Horizontal,
     keyboard::{self, Key},
     theme,
     widget::{button, column, container, row, space::Space, text, text_input},
-    Application, Command, Element, Length, Pixels, Size, Theme,
+    Alignment, Application, Command, Element, Length, Pixels, Size, Theme,
 };
 use iced_aw::menu::{self, Item};
 use rand::{seq::SliceRandom, thread_rng};
@@ -318,43 +317,25 @@ impl iced::Application for App {
 
         let second_row = row![lang_two, known];
 
-        let score_section = column![
-            row![
-                text("Current ")
-                    .size(self.font_size)
-                    .horizontal_alignment(Horizontal::Left),
-                Space::new(Length::FillPortion(3), 10),
-                text(format!("{} / 1", self.last_score))
-                    .size(self.font_size)
-                    .horizontal_alignment(Horizontal::Right),
-            ]
-            .spacing(self.spacing / 2.0),
-            row![
-                text("Progress ")
-                    .size(self.font_size)
-                    .horizontal_alignment(Horizontal::Left),
-                Space::new(Length::FillPortion(3), 10),
-                text(format!(
-                    "{} / {}",
-                    self.total_score.0,
-                    self.current.unwrap_or(0) + 1
-                ))
-                .size(self.font_size)
-                .horizontal_alignment(Horizontal::Right),
-            ]
-            .spacing(self.spacing / 2.0),
-            row![
-                text("Total ")
-                    .size(self.font_size)
-                    .horizontal_alignment(Horizontal::Left),
-                Space::new(Length::FillPortion(3), 10),
-                text(format!("{}", self.total_score.1))
-                    .size(self.font_size)
-                    .horizontal_alignment(Horizontal::Right),
-            ]
-            .spacing(self.spacing / 2.0),
+        let score_header = column![
+            text("Current ").size(self.font_size),
+            text("Progress ").size(self.font_size),
+            text("Total ").size(self.font_size),
         ]
-        .spacing(self.spacing / 2.0);
+        .spacing(self.spacing / 2.0)
+        .align_items(Alignment::Start);
+
+        let score_value_text = [
+            format!("{} / 1", self.last_score),
+            format!("{} / {}", self.total_score.0, self.current.unwrap_or(0) + 1),
+            format!("{}", self.total_score.1),
+        ];
+        let mut score_value = column![]
+            .spacing(self.spacing / 2.0)
+            .align_items(Alignment::End);
+        for i in score_value_text {
+            score_value = score_value.push(text(i).size(self.font_size))
+        }
 
         // Final grouping
         let grid = column![
@@ -363,7 +344,8 @@ impl iced::Application for App {
             second_row.spacing(self.spacing),
             row![
                 Space::new(Length::FillPortion(10), Length::Fill),
-                score_section,
+                score_header,
+                score_value,
                 Space::new(10, Length::Fill),
                 next_button,
             ]
