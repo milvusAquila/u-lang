@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use iced::{
-    advanced::Widget,
+    advanced::{self, Widget},
+    alignment,
     keyboard::{self, Key},
     theme,
     widget::{button, column, container, row, space::Space, text, text_input},
@@ -10,6 +11,7 @@ use iced_aw::menu::{self, Item};
 use iced_aw::{grid, grid_row};
 use rand::{seq::SliceRandom, thread_rng};
 use std::{path::PathBuf, sync::Arc, vec};
+use style::style_text;
 
 use grammar::*;
 mod settings;
@@ -18,8 +20,8 @@ mod style;
 fn main() -> iced::Result {
     App::run(iced::Settings {
         window: iced::window::Settings {
-            size: Size::new(600., 235.),
-            min_size: Some(Size::new(600., 235.)),
+            size: Size::new(450., 235.),
+            min_size: Some(Size::new(450., 235.)),
             ..Default::default()
         },
         ..Default::default()
@@ -233,27 +235,28 @@ impl iced::Application for App {
         let lang_one = text(&self.langs[0]).size(self.font_size);
         let lang_two = text(&self.langs[1]).size(self.font_size);
 
-        let known = text(match self.current {
-            Some(nb) => self.content[nb].get(1),
-            None => "".into(),
-        })
-        .size(self.font_size);
+        let known = style_text(
+            text(match self.current {
+                Some(nb) => self.content[nb].get(1),
+                None => "".into(),
+            }),
+            self.font_size,
+        );
 
         let next_button = button(
-            text(match self.state {
+            advanced::widget::Text::new(match self.state {
                 State::Correcting => "Next",
                 State::WaitUserAnswer => "Correct",
                 State::End => "Restart",
-                // _ => "",
             })
             .size(self.font_size)
-            .width(self.font_size * 4.0),
+            .width(self.font_size * 4.0)
+            .horizontal_alignment(alignment::Horizontal::Center),
         )
         .on_press(match self.state {
             State::Correcting => Message::Next,
             State::WaitUserAnswer => Message::Correction,
             State::End => Message::Start,
-            // _ => Message::None,
         });
 
         let open = button(text("Open").size(self.font_size))
@@ -282,8 +285,7 @@ impl iced::Application for App {
         #[rustfmt::skip]
         let header = iced_aw::menu_bar!(
             (button(text("File").size(self.font_size))
-                .style(theme::Button::Custom(Box::new(style::Header::from(&self.theme())))), // see
-                // in src/style.rs
+                .style(theme::Button::Custom(Box::new(style::Header::from(&self.theme())))), // see in src/style.rs
             {
                 let size = Widget::size(&open).width;
                 menu_tpl(iced_aw::menu_items!((open))).width(size)
@@ -302,26 +304,32 @@ impl iced::Application for App {
                 variable = variable.push(
                     text_input("Write your answer", &self.entry)
                         .size(self.font_size)
-                        .line_height(iced::widget::text::LineHeight::Relative(1.0))
                         .on_input(Message::TextInputChanged)
                         .on_submit(Message::Correction),
                 );
             }
             State::Correcting => {
-                variable = variable.push(text(&self.entry).size(self.font_size));
+                if self.last_score != 1.0 {
+                    variable = variable.push(style_text(
+                        text(&self.entry).style(style::TextColor::Red),
+                        self.font_size,
+                    ))
+                }
                 if self.current.is_some() && !self.entry.is_empty() {
                     variable = variable.push(Space::new(10, 0));
                 }
                 if let Some(nb) = &self.current {
-                    variable = variable.push(text(&self.content[*nb].get(0)).size(self.font_size))
+                    variable = variable.push(style_text(
+                        text(&self.content[*nb].get(0)).style(style::TextColor::Green),
+                        self.font_size,
+                    ))
                 }
             }
             _ => (),
         }
 
-        let main = grid!(grid_row!(lang_one, variable), grid_row!(lang_two, known))
-            .spacing(self.spacing)
-            .padding(self.spacing);
+        let main =
+            grid!(grid_row!(lang_one, variable), grid_row!(lang_two, known)).spacing(self.spacing);
 
         // Score
         let score_header = column![
