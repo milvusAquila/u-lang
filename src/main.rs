@@ -70,7 +70,7 @@ impl App {
             Some(nb) => {
                 self.current = if nb + 1 == self.content.len() {
                     self.state = State::End;
-                    None
+                    Some(nb)
                 } else {
                     self.state = State::WaitUserAnswer;
                     Some(nb + 1)
@@ -237,7 +237,10 @@ impl iced::Application for App {
 
         let known = style_text(
             text(match self.current {
-                Some(nb) => self.content[nb].get(1),
+                Some(nb) => match self.state {
+                    State::End => "".into(),
+                    _ => self.content[nb].get(1),
+                },
                 None => "".into(),
             }),
             self.font_size,
@@ -295,7 +298,7 @@ impl iced::Application for App {
             {
                 self.view_settings() // see in src/settings.rs
             })
-        ).padding(3.0);
+        );
 
         // Main
         let mut variable = row![].width(self.font_size.0 * 20.0);
@@ -309,20 +312,30 @@ impl iced::Application for App {
                 );
             }
             State::Correcting => {
-                if self.last_score != 1.0 {
+                let nb = self
+                    .current
+                    .expect("ERROR: current index in the data base is set to None");
+                if self.entry.trim().is_empty() {
                     variable = variable.push(style_text(
-                        text(&self.entry).style(style::TextColor::Red),
+                        text(&self.content[nb].get(0)).style(style::TextColor::Red),
                         self.font_size,
-                    ))
-                }
-                if self.current.is_some() && !self.entry.is_empty() {
-                    variable = variable.push(Space::new(10, 0));
-                }
-                if let Some(nb) = &self.current {
+                    ));
+                } else if self.last_score != 1.0 {
+                    variable = variable
+                        .push(style_text(
+                            text(&self.entry).style(style::TextColor::Red),
+                            self.font_size,
+                        ))
+                        .push(Space::with_width(Length::Fixed(10.0)))
+                        .push(style_text(
+                            text(&self.content[nb].get(0)).style(style::TextColor::Green),
+                            self.font_size,
+                        ));
+                } else {
                     variable = variable.push(style_text(
-                        text(&self.content[*nb].get(0)).style(style::TextColor::Green),
+                        text(&self.content[nb].get(0)).style(style::TextColor::Green),
                         self.font_size,
-                    ))
+                    ));
                 }
             }
             _ => (),
@@ -364,14 +377,18 @@ impl iced::Application for App {
                 next_button,
             ]
             .spacing(self.spacing),
-            row![error_log].spacing(self.spacing),
-        ]
+        ].push_maybe(match &self.error {
+            Some(_) => Some(error_log),
+            None => None,
+        })
         .spacing(self.spacing);
         let mut contents = Element::from(grid);
         if self.debug_layout {
             contents = contents.explain(iced::Color::WHITE);
         }
+        let container_padding = if self.spacing < 10.0 { self.spacing} else {10.0};
         container(contents)
+            .padding([0.0, container_padding, container_padding, container_padding])
             .width(Length::Fill)
             .height(Length::Fill)
             .center_x()
