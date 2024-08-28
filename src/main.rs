@@ -1,10 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use iced::{
-    advanced::{self, Widget},
     alignment,
     keyboard::{self, Key},
     theme,
-    widget::{button, column, container, row, space::Space, text, text_input},
+    widget::{button, column, container, progress_bar, row, space::Space, text, text_input},
     Alignment, Application, Command, Element, Length, Pixels, Size, Theme,
 };
 use iced_aw::menu::{self, Item};
@@ -20,8 +19,8 @@ mod style;
 fn main() -> iced::Result {
     App::run(iced::Settings {
         window: iced::window::Settings {
-            size: Size::new(450., 235.),
-            min_size: Some(Size::new(450., 235.)),
+            size: Size::new(450., 200.),
+            min_size: Some(Size::new(450., 200.)),
             ..Default::default()
         },
         ..Default::default()
@@ -39,8 +38,9 @@ struct App {
     langs: [Lang; 2],
     state: State,
     last_score: f32,
+    score: f32,
+    length: usize,
     dark_theme: bool,
-    total_score: (f32, usize),
     font_size: Pixels,
     spacing: f32,
 }
@@ -51,7 +51,8 @@ impl App {
         self.current = Some(0);
         content.shuffle(&mut thread_rng());
         self.content = content;
-        self.total_score = (0., self.content.len());
+        self.score = 0.0;
+        self.length = self.content.len();
         self.last_score = 0.;
         self.state = State::WaitUserAnswer;
     }
@@ -61,7 +62,7 @@ impl App {
             0,
             &self.langs[0],
         );
-        self.total_score.0 += self.last_score;
+        self.score += self.last_score;
         self.state = State::Correcting;
     }
     fn next(&mut self) {
@@ -94,7 +95,8 @@ impl Default for App {
         default_content.shuffle(&mut thread_rng());
         Self {
             debug_layout: false,
-            total_score: (0., default_content.len()),
+            score: 0.0,
+            length: default_content.len(),
             content: default_content,
             current: Some(0),
             entry: String::new(),
@@ -232,8 +234,8 @@ impl iced::Application for App {
 
     fn view(&self) -> Element<'_, Message> {
         // Declarating widgets
-        let lang_one = text(&self.langs[0]).size(self.font_size);
-        let lang_two = text(&self.langs[1]).size(self.font_size);
+        let lang_one = style_text(text(&self.langs[0]), self.font_size);
+        let lang_two = style_text(text(&self.langs[1]), self.font_size);
 
         let known = style_text(
             text(match self.current {
@@ -247,7 +249,7 @@ impl iced::Application for App {
         );
 
         let next_button = button(
-            advanced::widget::Text::new(match self.state {
+            text(match self.state {
                 State::Correcting => "Next",
                 State::WaitUserAnswer => "Correct",
                 State::End => "Restart",
@@ -280,18 +282,15 @@ impl iced::Application for App {
             None => "".to_string(),
         })
         .size(self.font_size);
-        // End declatating widgets
-
-        // Grouping widgets
 
         // Header
         #[rustfmt::skip]
         let header = iced_aw::menu_bar!(
             (button(text("File").size(self.font_size))
-                .style(theme::Button::Custom(Box::new(style::Header::from(&self.theme())))), // see in src/style.rs
+                .style(theme::Button::Custom(Box::new(style::Header::from(&self.theme())))),
+                // see in src/style.rs
             {
-                let size = Widget::size(&open).width;
-                menu_tpl(iced_aw::menu_items!((open))).width(size)
+                menu_tpl(iced_aw::menu_items!((open))).width(Length::Shrink)
             })
             (button(text("Settings").size(self.font_size))
                 .style(theme::Button::Custom(Box::new(style::Header::from(&self.theme())))),
@@ -301,7 +300,9 @@ impl iced::Application for App {
         );
 
         // Main
-        let mut variable = row![].width(self.font_size.0 * 20.0);
+        let mut variable = row![]
+            .width(self.font_size.0 * 20.0)
+            .align_items(Alignment::Center);
         match self.state {
             State::WaitUserAnswer => {
                 variable = variable.push(
@@ -337,47 +338,38 @@ impl iced::Application for App {
                         self.font_size,
                     ));
                 }
+                variable = variable
+                    .push(Space::with_width(Length::Fixed(10.0)))
+                    .push(text(self.last_score).size(self.font_size));
             }
             _ => (),
         }
 
-        let main =
-            grid!(grid_row!(lang_one, variable), grid_row!(lang_two, known)).spacing(self.spacing);
-
         // Score
-        let score_header = column![
-            text("Current ").size(self.font_size),
-            text("Progress ").size(self.font_size),
-            text("Total ").size(self.font_size),
-        ]
-        .spacing(self.spacing / 2.0)
-        .align_items(Alignment::Start);
-
-        let score_value_text = [
-            format!("{} / 1", self.last_score),
-            format!("{} / {}", self.total_score.0, self.current.unwrap_or(0) + 1),
-            format!("{}", self.total_score.1),
-        ];
-        let mut score_value = column![]
-            .spacing(self.spacing / 2.0)
-            .align_items(Alignment::End);
-        for i in score_value_text {
-            score_value = score_value.push(text(i).size(self.font_size))
-        }
+        let current = self.current.unwrap_or(0);
+        let max = self.length - 1;
+        let score = text(format!(
+            "{} / {}",
+            self.score,
+            self.current.unwrap_or(0) + 1
+        ))
+        .size(self.font_size);
+        let advancement = progress_bar(0.0..=max as f32, current as f32).height(7.0);
+        let advancement_text = text(format!("{} %", current * 100 / max)).size(self.font_size);
 
         // Final
         let grid = column![
             row![header],
-            main,
-            row![
-                Space::new(Length::FillPortion(10), Length::Fill),
-                score_header,
-                score_value,
-                Space::new(10, Length::Fill),
-                next_button,
-            ]
-            .spacing(self.spacing),
-        ].push_maybe(match &self.error {
+            grid!(grid_row!(lang_one, variable), grid_row!(lang_two, known)).spacing(self.spacing),
+            row![Space::with_width(Length::Fill), score, next_button,]
+                .spacing(self.spacing / 2.0)
+                .align_items(Alignment::Center),
+            row![advancement, advancement_text,]
+                .spacing(self.spacing)
+                .align_items(Alignment::Center),
+            Space::with_height(Length::Fill),
+        ]
+        .push_maybe(match &self.error {
             Some(_) => Some(error_log),
             None => None,
         })
@@ -386,13 +378,17 @@ impl iced::Application for App {
         if self.debug_layout {
             contents = contents.explain(iced::Color::WHITE);
         }
-        let container_padding = if self.spacing < 10.0 { self.spacing} else {10.0};
+        let ctnr_padding = if self.spacing < 10.0 {
+            self.spacing
+        } else {
+            10.0
+        };
         container(contents)
-            .padding([0.0, container_padding, container_padding, container_padding])
+            .padding([0.0, ctnr_padding, ctnr_padding, ctnr_padding])
             .width(Length::Fill)
-            .height(Length::Fill)
+            .height(Length::Shrink)
             .center_x()
-            .center_y()
+            .align_y(alignment::Vertical::Center)
             .into()
     }
 
