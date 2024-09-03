@@ -43,6 +43,7 @@ struct App {
     dark_theme: bool,
     font_size: Pixels,
     spacing: f32,
+    input_id: text_input::Id,
 }
 
 impl App {
@@ -108,6 +109,7 @@ impl Default for App {
             dark_theme: true,
             font_size: Pixels(16.),
             spacing: 5.0,
+            input_id: text_input::Id::unique(),
         }
     }
 }
@@ -205,7 +207,7 @@ impl iced::Application for App {
             }
             Message::Next => {
                 self.next();
-                Command::none()
+                text_input::focus::<Message>(self.input_id.clone())
             }
             // Message::None => Command::none(),
             Message::Start => {
@@ -215,7 +217,7 @@ impl iced::Application for App {
                     self.init(App::default().content);
                 }
                 self.state = State::WaitUserAnswer;
-                Command::none()
+                text_input::focus::<Message>(self.input_id.clone())
             }
             Message::ThemeSelected => {
                 self.dark_theme = !self.dark_theme;
@@ -305,12 +307,13 @@ impl iced::Application for App {
             .align_items(Alignment::Center);
         match self.state {
             State::WaitUserAnswer => {
-                variable = variable.push(
+                variable = variable.push({
                     text_input("Write your answer", &self.entry)
+                        .id(self.input_id.clone())
                         .size(self.font_size)
                         .on_input(Message::TextInputChanged)
-                        .on_submit(Message::Correction),
-                );
+                        .on_submit(Message::Correction)
+                });
             }
             State::Correcting => {
                 let nb = self
