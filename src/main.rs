@@ -199,7 +199,7 @@ impl iced::Application for App {
                     State::Correcting => self.next(),
                     _ => (),
                 }
-                Command::none()
+                text_input::focus::<Message>(self.input_id.clone())
             }
             Message::Correction => {
                 self.correct();
