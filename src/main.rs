@@ -2,7 +2,7 @@
 use iced::{
     alignment,
     keyboard::{self, Key},
-    widget::{button, column, container, progress_bar, row, /* space::Space, */ text, text_input,},
+    widget::{button, column, container, progress_bar, row, Space, text, text_input,},
     Alignment, Element, Length, Pixels, Size, Task, Theme,
 };
 use iced_aw::menu::{self, Item};
@@ -319,7 +319,7 @@ impl App {
                             text(&self.entry).color(style::TextColor::Red),
                             self.font_size,
                         ))
-                        // .push(Space::with_width(Length::Fixed(10.0)))
+                        .push(Space::with_width(Length::Fixed(10.0)))
                         .push(style_text(
                             text(self.content[nb].get(0)).color(style::TextColor::Green),
                             self.font_size,
@@ -331,7 +331,7 @@ impl App {
                     ));
                 }
                 variable = variable
-                    // .push(Space::with_width(Length::Fixed(10.0)))
+                    .push(Space::with_width(Length::Fixed(10.0)))
                     .push(text(self.last_score).size(self.font_size));
             }
             _ => (),
@@ -354,7 +354,7 @@ impl App {
             row![header],
             grid!(grid_row!(lang_one, variable), grid_row!(lang_two, known)).spacing(self.spacing),
             row![
-                /* Space::with_width(Length::Fill), */ score,
+                Space::with_width(Length::Fill), score,
                 next_button,
             ]
             .spacing(self.spacing / 2.0)
@@ -362,7 +362,7 @@ impl App {
             row![advancement, advancement_text,]
                 .spacing(self.spacing)
                 .align_y(Alignment::Center),
-            // Space::with_height(Length::Fill),
+            Space::with_height(Length::Fill),
         ]
         .push_maybe(match &self.error {
             Some(_) => Some(error_log),
