@@ -12,10 +12,9 @@ impl App {
                 .spacing(5.0)
         };
 
-        let theme: iced::widget::Toggler<Message> =
-            toggler(Some("Theme".into()), self.dark_theme, |_| {
-                Message::ThemeSelected
-            })
+        let theme: iced::widget::Toggler<Message> = toggler(self.dark_theme)
+            .label("Theme")
+            .on_toggle(|_| Message::ThemeSelected)
             .size(self.font_size)
             .text_size(self.font_size);
 
@@ -25,11 +24,11 @@ impl App {
         let spacing_header = text("Spacing").size(self.font_size);
         let spacing_slider = slider(0.0..=20.0, self.spacing, Message::SpacingChanged);
 
-        let debug_layout = toggler(Some("Debug layout".into()), self.debug_layout, |_| {
-            Message::DebugToggle
-        })
-        .size(self.font_size)
-        .text_size(self.font_size);
+        let debug_layout = toggler(self.debug_layout)
+            .label("Debug layout")
+            .on_toggle(|_| Message::DebugToggle)
+            .size(self.font_size)
+            .text_size(self.font_size);
 
         #[rustfmt::skip]
         let settings = menu_tpl(iced_aw::menu_items!(

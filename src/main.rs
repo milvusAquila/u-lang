@@ -2,9 +2,8 @@
 use iced::{
     alignment,
     keyboard::{self, Key},
-    theme,
-    widget::{button, column, container, progress_bar, row, space::Space, text, text_input},
-    Alignment, Application, Command, Element, Length, Pixels, Size, Theme,
+    widget::{button, column, container, progress_bar, row, /* space::Space, */ text, text_input,},
+    Alignment, Element, Length, Pixels, Size, Task, Theme,
 };
 use iced_aw::menu::{self, Item};
 use iced_aw::{grid, grid_row};
@@ -17,14 +16,15 @@ mod settings;
 mod style;
 
 fn main() -> iced::Result {
-    App::run(iced::Settings {
-        window: iced::window::Settings {
+    iced::application(App::title, App::update, App::view)
+        .window(iced::window::Settings {
             size: Size::new(450., 200.),
             min_size: Some(Size::new(450., 200.)),
             ..Default::default()
-        },
-        ..Default::default()
-    })
+        })
+        .subscription(App::subscription)
+        .theme(App::theme)
+        .run()
 }
 
 #[derive(Debug)]
@@ -144,16 +144,7 @@ enum State {
     End,
 }
 
-impl iced::Application for App {
-    type Message = Message;
-    type Theme = Theme;
-    type Executor = iced::executor::Default;
-    type Flags = ();
-
-    fn new(_flag: Self::Flags) -> (Self, Command<Message>) {
-        (Self::default(), Command::none())
-    }
-
+impl App {
     fn title(&self) -> String {
         match &self.file {
             Some(path) => format!("{} — ULang ", path.to_str().unwrap_or("")),
@@ -161,7 +152,7 @@ impl iced::Application for App {
         }
     }
 
-    fn subscription(&self) -> iced::Subscription<Self::Message> {
+    fn subscription(&self) -> iced::Subscription<Message> {
         keyboard::on_key_press(|key, modifiers| match key.as_ref() {
             Key::Character("o") if modifiers.command() => Some(Message::OpenFile), // Ctrl + o
             Key::Named(keyboard::key::Named::Enter) => Some(Message::Enter),       // Enter
@@ -169,17 +160,17 @@ impl iced::Application for App {
         })
     }
 
-    fn update(&mut self, message: Message) -> Command<Message> {
+    fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::DebugToggle => {
                 self.debug_layout = !self.debug_layout;
-                Command::none()
+                Task::none()
             }
             Message::TextInputChanged(value) => {
                 self.entry = value;
-                Command::none()
+                Task::none()
             }
-            Message::OpenFile => Command::perform(pick_file(), Message::FileOpened),
+            Message::OpenFile => Task::perform(pick_file(), Message::FileOpened),
             Message::FileOpened(result) => {
                 match result {
                     Ok((path, content)) => {
@@ -191,7 +182,7 @@ impl iced::Application for App {
                     Err(Error::DialogClosed) => (),
                     Err(err) => self.error = Some(err),
                 }
-                Command::none()
+                Task::none()
             }
             Message::Enter => {
                 match self.state {
@@ -203,13 +194,13 @@ impl iced::Application for App {
             }
             Message::Correction => {
                 self.correct();
-                Command::none()
+                Task::none()
             }
             Message::Next => {
                 self.next();
                 text_input::focus::<Message>(self.input_id.clone())
             }
-            // Message::None => Command::none(),
+            // Message::None => Task::none(),
             Message::Start => {
                 if let Some(_) = self.file {
                     self.init(self.content.clone());
@@ -221,23 +212,23 @@ impl iced::Application for App {
             }
             Message::ThemeSelected => {
                 self.dark_theme = !self.dark_theme;
-                Command::none()
+                Task::none()
             }
             Message::TextFontChanged(new_size) => {
                 self.font_size.0 = new_size;
-                Command::none()
+                Task::none()
             }
             Message::SpacingChanged(new_spacing) => {
                 self.spacing = new_spacing;
-                Command::none()
+                Task::none()
             }
         }
     }
 
     fn view(&self) -> Element<'_, Message> {
         // Declarating widgets
-        let lang_one = style_text(text(&self.langs[0]), self.font_size);
-        let lang_two = style_text(text(&self.langs[1]), self.font_size);
+        let lang_one = style_text(text(self.langs[0].to_string()), self.font_size);
+        let lang_two = style_text(text(self.langs[1].to_string()), self.font_size);
 
         let known = style_text(
             text(match self.current {
@@ -258,7 +249,7 @@ impl iced::Application for App {
             })
             .size(self.font_size)
             .width(self.font_size * 4.0)
-            .horizontal_alignment(alignment::Horizontal::Center),
+            .align_x(alignment::Horizontal::Center),
         )
         .on_press(match self.state {
             State::Correcting => Message::Next,
@@ -268,9 +259,7 @@ impl iced::Application for App {
 
         let open = button(text("Open").size(self.font_size))
             .on_press(Message::OpenFile)
-            .style(theme::Button::Custom(Box::new(style::Header::from(
-                &self.theme(),
-            ))));
+            .style(style::header_button);
 
         let menu_tpl = |items| {
             menu::Menu::new(items)
@@ -289,13 +278,13 @@ impl iced::Application for App {
         #[rustfmt::skip]
         let header = iced_aw::menu_bar!(
             (button(text("File").size(self.font_size))
-                .style(theme::Button::Custom(Box::new(style::Header::from(&self.theme())))),
+                .style(style::header_button),
                 // see in src/style.rs
             {
                 menu_tpl(iced_aw::menu_items!((open))).width(Length::Shrink)
             })
             (button(text("Settings").size(self.font_size))
-                .style(theme::Button::Custom(Box::new(style::Header::from(&self.theme())))),
+                .style(style::header_button),
             {
                 self.view_settings() // see in src/settings.rs
             })
@@ -304,7 +293,7 @@ impl iced::Application for App {
         // Main
         let mut variable = row![]
             .width(self.font_size.0 * 20.0)
-            .align_items(Alignment::Center);
+            .align_y(Alignment::Center);
         match self.state {
             State::WaitUserAnswer => {
                 variable = variable.push({
@@ -321,28 +310,28 @@ impl iced::Application for App {
                     .expect("ERROR: current index in the data base is set to None");
                 if self.entry.trim().is_empty() {
                     variable = variable.push(style_text(
-                        text(&self.content[nb].get(0)).style(style::TextColor::Red),
+                        text(self.content[nb].get(0)).color(style::TextColor::Red),
                         self.font_size,
                     ));
                 } else if self.last_score != 1.0 {
                     variable = variable
                         .push(style_text(
-                            text(&self.entry).style(style::TextColor::Red),
+                            text(&self.entry).color(style::TextColor::Red),
                             self.font_size,
                         ))
-                        .push(Space::with_width(Length::Fixed(10.0)))
+                        // .push(Space::with_width(Length::Fixed(10.0)))
                         .push(style_text(
-                            text(&self.content[nb].get(0)).style(style::TextColor::Green),
+                            text(self.content[nb].get(0)).color(style::TextColor::Green),
                             self.font_size,
                         ));
                 } else {
                     variable = variable.push(style_text(
-                        text(&self.content[nb].get(0)).style(style::TextColor::Green),
+                        text(self.content[nb].get(0)).color(style::TextColor::Green),
                         self.font_size,
                     ));
                 }
                 variable = variable
-                    .push(Space::with_width(Length::Fixed(10.0)))
+                    // .push(Space::with_width(Length::Fixed(10.0)))
                     .push(text(self.last_score).size(self.font_size));
             }
             _ => (),
@@ -364,13 +353,16 @@ impl iced::Application for App {
         let grid = column![
             row![header],
             grid!(grid_row!(lang_one, variable), grid_row!(lang_two, known)).spacing(self.spacing),
-            row![Space::with_width(Length::Fill), score, next_button,]
-                .spacing(self.spacing / 2.0)
-                .align_items(Alignment::Center),
+            row![
+                /* Space::with_width(Length::Fill), */ score,
+                next_button,
+            ]
+            .spacing(self.spacing / 2.0)
+            .align_y(Alignment::Center),
             row![advancement, advancement_text,]
                 .spacing(self.spacing)
-                .align_items(Alignment::Center),
-            Space::with_height(Length::Fill),
+                .align_y(Alignment::Center),
+            // Space::with_height(Length::Fill),
         ]
         .push_maybe(match &self.error {
             Some(_) => Some(error_log),
@@ -381,17 +373,16 @@ impl iced::Application for App {
         if self.debug_layout {
             contents = contents.explain(iced::Color::WHITE);
         }
-        let ctnr_padding = if self.spacing < 10.0 {
-            self.spacing
-        } else {
-            10.0
-        };
         container(contents)
-            .padding([0.0, ctnr_padding, ctnr_padding, ctnr_padding])
-            .width(Length::Fill)
-            .height(Length::Shrink)
-            .center_x()
-            .align_y(alignment::Vertical::Center)
+            .padding(
+                iced::Padding::from(if self.spacing < 10.0 {
+                    self.spacing
+                } else {
+                    10.0
+                })
+                .top(0.0),
+            )
+            .center(Length::Shrink)
             .into()
     }
 
