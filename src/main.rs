@@ -2,7 +2,7 @@
 use iced::{
     alignment,
     keyboard::{self, Key},
-    widget::{button, column, container, progress_bar, row, Space, text, text_input,},
+    widget::{button, column, container, progress_bar, row, text, text_input, Space},
     Alignment, Element, Length, Pixels, Size, Task, Theme,
 };
 use iced_aw::menu::{self, Item};
@@ -137,7 +137,7 @@ enum Error {
     ParseError,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum State {
     Correcting,
     WaitUserAnswer,
@@ -341,9 +341,14 @@ impl App {
         let current = self.current.unwrap_or(0);
         let max = self.length - 1;
         let score = text(format!(
-            "{} / {}",
+            "{} / {}{}",
             self.score,
-            self.current.unwrap_or(0) + 1
+            current + 1,
+            if self.state == State::End {
+                format!(" ({:.2} / 20)", self.score * 20.0 / (current + 1) as f32)
+            } else {
+                "".to_string()
+            }
         ))
         .size(self.font_size);
         let advancement = progress_bar(0.0..=max as f32, current as f32).height(7.0);
@@ -353,12 +358,9 @@ impl App {
         let grid = column![
             row![header],
             grid!(grid_row!(lang_one, variable), grid_row!(lang_two, known)).spacing(self.spacing),
-            row![
-                Space::with_width(Length::Fill), score,
-                next_button,
-            ]
-            .spacing(self.spacing / 2.0)
-            .align_y(Alignment::Center),
+            row![Space::with_width(Length::Fill), score, next_button,]
+                .spacing(self.spacing / 2.0)
+                .align_y(Alignment::Center),
             row![advancement, advancement_text,]
                 .spacing(self.spacing)
                 .align_y(Alignment::Center),
