@@ -12,6 +12,7 @@ use std::{path::PathBuf, sync::Arc, vec};
 use style::style_text;
 
 use grammar::*;
+mod editor;
 mod settings;
 mod style;
 
@@ -30,6 +31,7 @@ fn main() -> iced::Result {
 #[derive(Debug)]
 struct App {
     debug_layout: bool,
+    screen: Screen,
     content: Vec<Entry>,
     current: Option<usize>,
     entry: String,
@@ -96,6 +98,7 @@ impl Default for App {
         default_content.shuffle(&mut thread_rng());
         Self {
             debug_layout: false,
+            screen: Screen::default(),
             score: 0.0,
             length: default_content.len(),
             content: default_content,
@@ -120,6 +123,8 @@ enum Message {
     TextInputChanged(String),
     OpenFile,
     FileOpened(Result<(PathBuf, Arc<([Lang; 2], Vec<Entry>)>), Error>),
+    OpenEditor,
+    EditorClosed(()),
     Correction,
     Next,
     // None,
@@ -128,6 +133,13 @@ enum Message {
     ThemeSelected,
     TextFontChanged(f32),
     SpacingChanged(f32),
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+enum Screen {
+    #[default]
+    Main,
+    Editor,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -184,6 +196,14 @@ impl App {
                 }
                 Task::none()
             }
+            Message::OpenEditor => {
+                self.screen = Screen::Editor;
+                Task::none()
+            }
+            Message::EditorClosed(()) => {
+                self.screen = Screen::Main;
+                Task::none()
+            }
             Message::Enter => {
                 match self.state {
                     State::WaitUserAnswer => self.correct(),
@@ -226,17 +246,85 @@ impl App {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        // Declarating widgets
+        let mut screen = match self.screen {
+            Screen::Main => self.screen_main(),
+            Screen::Editor => self.screen_editor(), // see in src/editor.rs
+        };
+        if self.debug_layout {
+            screen = screen.explain(iced::Color::WHITE);
+        }
+        container(screen)
+            .padding(
+                iced::Padding::from(if self.spacing < 10.0 {
+                    self.spacing
+                } else {
+                    10.0
+                })
+                .top(0.0),
+            )
+            .center(Length::Shrink)
+            .into()
+    }
+
+    fn theme(&self) -> Theme {
+        if self.dark_theme {
+            Theme::Dark
+        } else {
+            Theme::Light
+        }
+    }
+
+    fn screen_main(&self) -> Element<'_, Message> {
+        /*
+         *   |File|Settings|                         -> Header
+         *   ---------------
+         *   |English| {answer / correction} |       -|
+         *   |French | {known element}       |       -> Main
+         *   ---------------
+         *                  {score} {continue}       -|
+         *          {------progress bar------}       -> Score
+         */
+        // Header
+        let menu_tpl = |items| {
+            menu::Menu::new(items)
+                .max_width(180.0)
+                .offset(5.0)
+                .spacing(5.0)
+        };
+
+        let open = button(text("Open").size(self.font_size))
+            .on_press(Message::OpenFile)
+            .style(style::header_button);
+
+        let editor = button(text("Edit").size(self.font_size))
+            .on_press(Message::OpenEditor)
+            .style(style::header_button);
+
+        #[rustfmt::skip]
+        let header = iced_aw::menu_bar!(
+            (button(text("File").size(self.font_size))
+                .style(style::header_button), // see in src/style.rs
+            {
+                menu_tpl(iced_aw::menu_items!(
+                    (open)
+                    (editor)
+                )).width(Length::Shrink)
+            })
+            (button(text("Settings").size(self.font_size))
+                .style(style::header_button),
+            {
+                self.view_settings() // see in src/settings.rs
+            })
+        );
+
+        // Main
         let lang_one = style_text(text(self.langs[0].to_string()), self.font_size);
         let lang_two = style_text(text(self.langs[1].to_string()), self.font_size);
 
         let known = style_text(
             text(match self.current {
-                Some(nb) => match self.state {
-                    State::End => "".into(),
-                    _ => self.content[nb].get(1),
-                },
-                None => "".into(),
+                Some(nb) if self.state != State::End => self.content[nb].get(1),
+                _ => "".into(),
             }),
             self.font_size,
         );
@@ -257,38 +345,11 @@ impl App {
             State::End => Message::Start,
         });
 
-        let open = button(text("Open").size(self.font_size))
-            .on_press(Message::OpenFile)
-            .style(style::header_button);
-
-        let menu_tpl = |items| {
-            menu::Menu::new(items)
-                .max_width(180.0)
-                .offset(5.0)
-                .spacing(5.0)
-        };
-
         let error_log = text(match &self.error {
             Some(err) => format!("{:?}: invalid file", err),
             None => "".to_string(),
         })
         .size(self.font_size);
-
-        // Header
-        #[rustfmt::skip]
-        let header = iced_aw::menu_bar!(
-            (button(text("File").size(self.font_size))
-                .style(style::header_button),
-                // see in src/style.rs
-            {
-                menu_tpl(iced_aw::menu_items!((open))).width(Length::Shrink)
-            })
-            (button(text("Settings").size(self.font_size))
-                .style(style::header_button),
-            {
-                self.view_settings() // see in src/settings.rs
-            })
-        );
 
         // Main
         let mut variable = row![]
@@ -356,8 +417,11 @@ impl App {
 
         // Final
         let grid = column![
-            row![header],
+            // Header
+            header,
+            // Main
             grid!(grid_row!(lang_one, variable), grid_row!(lang_two, known)).spacing(self.spacing),
+            // Score
             row![Space::with_width(Length::Fill), score, next_button,]
                 .spacing(self.spacing / 2.0)
                 .align_y(Alignment::Center),
@@ -371,29 +435,7 @@ impl App {
             None => None,
         })
         .spacing(self.spacing);
-        let mut contents = Element::from(grid);
-        if self.debug_layout {
-            contents = contents.explain(iced::Color::WHITE);
-        }
-        container(contents)
-            .padding(
-                iced::Padding::from(if self.spacing < 10.0 {
-                    self.spacing
-                } else {
-                    10.0
-                })
-                .top(0.0),
-            )
-            .center(Length::Shrink)
-            .into()
-    }
-
-    fn theme(&self) -> Theme {
-        if self.dark_theme {
-            Theme::Dark
-        } else {
-            Theme::Light
-        }
+        Element::from(grid)
     }
 }
 

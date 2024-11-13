@@ -7,7 +7,7 @@ edition = "2021"
 rand = "0.8.5"
 iced = { version = "0.13.1", features = ["tokio", "advanced"] }
 iced_aw = {version = "0.11.0", default-features = false, features = ["grid", "menu", "quad"]}
-tokio = { version = "1.40.0", features = ["rt"] }
+tokio = { version = "1.41.0", features = ["rt"] }
 rfd = "0.15.0"
 json = "0.12.4"
 async-std = "1.13.0"
@@ -21,4 +21,4 @@ web-sys = { version = "0.3", features = [ "Document", "Window" ]}
 iced = { version = "0.13", features = ["image", "debug", "webgl"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-tokio = { version = "1.40.0", features = ["fs"] }
+tokio = { version = "1.41.0", features = ["fs"] }
