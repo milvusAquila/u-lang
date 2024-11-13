@@ -39,8 +39,7 @@ struct App {
     file: Option<PathBuf>,
     langs: [Lang; 2],
     state: State,
-    last_score: f32,
-    score: f32,
+    score: (f32, f32),
     length: usize,
     dark_theme: bool,
     font_size: Pixels,
@@ -54,18 +53,17 @@ impl App {
         self.current = Some(0);
         content.shuffle(&mut thread_rng());
         self.content = content;
-        self.score = 0.0;
+        self.score = (0.0, 0.0);
         self.length = self.content.len();
-        self.last_score = 0.;
         self.state = State::WaitUserAnswer;
     }
     fn correct(&mut self) {
-        self.last_score = self.content[self.current.unwrap()].correct(
+        self.score.0 = self.content[self.current.unwrap()].correct(
             &self.entry.trim().into(),
             0,
             &self.langs[0],
         );
-        self.score += self.last_score;
+        self.score.1 += self.score.0;
         self.state = State::Correcting;
     }
     fn next(&mut self) {
@@ -99,7 +97,7 @@ impl Default for App {
         Self {
             debug_layout: false,
             screen: Screen::default(),
-            score: 0.0,
+            score: (0.0, 0.0),
             length: default_content.len(),
             content: default_content,
             current: Some(0),
@@ -108,7 +106,6 @@ impl Default for App {
             file: None,
             langs: ["English".into(), "French".into()],
             state: State::WaitUserAnswer,
-            last_score: 0.,
             dark_theme: true,
             font_size: Pixels(16.),
             spacing: 5.0,
@@ -374,7 +371,7 @@ impl App {
                         text(self.content[nb].get(0)).color(style::TextColor::Red),
                         self.font_size,
                     ));
-                } else if self.last_score != 1.0 {
+                } else if self.score.0 != 1.0 {
                     variable = variable
                         .push(style_text(
                             text(&self.entry).color(style::TextColor::Red),
@@ -393,7 +390,7 @@ impl App {
                 }
                 variable = variable
                     .push(Space::with_width(Length::Fixed(10.0)))
-                    .push(text(self.last_score).size(self.font_size));
+                    .push(text(self.score.0).size(self.font_size));
             }
             _ => (),
         }
@@ -403,10 +400,10 @@ impl App {
         let max = self.length - 1;
         let score = text(format!(
             "{} / {}{}",
-            self.score,
+            self.score.1,
             current + 1,
             if self.state == State::End {
-                format!(" ({:.2} / 20)", self.score * 20.0 / (current + 1) as f32)
+                format!(" ({:.2} / 20)", self.score.1 * 20.0 / (current + 1) as f32)
             } else {
                 "".to_string()
             }
