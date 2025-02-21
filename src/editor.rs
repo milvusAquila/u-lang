@@ -33,7 +33,7 @@ impl App {
                     (editor)
                 )).width(Length::Shrink)
             })
-            (button(text("ings").size(self.font_size))
+            (button(text("Settings").size(self.font_size))
                 .style(style::header_button),
             {
                 self.view_settings() // see in src/settings.rs

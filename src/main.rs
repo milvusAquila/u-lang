@@ -350,7 +350,6 @@ impl App {
 
         // Main
         let mut variable = row![]
-            .width(self.font_size.0 * 20.0)
             .align_y(Alignment::Center);
         match self.state {
             State::WaitUserAnswer => {
@@ -417,7 +416,9 @@ impl App {
             // Header
             header,
             // Main
-            grid!(grid_row!(lang_one, variable), grid_row!(lang_two, known)).spacing(self.spacing),
+            grid!(grid_row!(lang_one, variable), grid_row!(lang_two, known)).spacing(self.spacing)
+                .column_widths(&[Length::Shrink, Length::Fill])
+                .width(Length::Fill),
             // Score
             row![Space::with_width(Length::Fill), score, next_button,]
                 .spacing(self.spacing / 2.0)
