@@ -19,8 +19,8 @@ mod style;
 fn main() -> iced::Result {
     iced::application(App::title, App::update, App::view)
         .window(iced::window::Settings {
-            size: Size::new(450., 200.),
-            min_size: Some(Size::new(450., 200.)),
+            size: Size::new(700., 400.),
+            min_size: Some(Size::new(700., 400.)),
             ..Default::default()
         })
         .subscription(App::subscription)
@@ -107,7 +107,7 @@ impl Default for App {
             langs: ["English".into(), "French".into()],
             state: State::WaitUserAnswer,
             dark_theme: true,
-            font_size: Pixels(16.),
+            font_size: Pixels(16.0),
             spacing: 5.0,
             input_id: text_input::Id::unique(),
         }
@@ -128,7 +128,7 @@ enum Message {
     Start,
     Enter,
     ThemeSelected,
-    TextFontChanged(f32),
+    TextFontSizeChanged(f32),
     SpacingChanged(f32),
 }
 
@@ -231,7 +231,7 @@ impl App {
                 self.dark_theme = !self.dark_theme;
                 Task::none()
             }
-            Message::TextFontChanged(new_size) => {
+            Message::TextFontSizeChanged(new_size) => {
                 self.font_size.0 = new_size;
                 Task::none()
             }

@@ -19,7 +19,7 @@ impl App {
             .text_size(self.font_size);
 
         let font_size_header = text("Text size").size(self.font_size);
-        let font_size_slidder = slider(10.0..=50.0, self.font_size.0, Message::TextFontChanged);
+        let font_size_slidder = slider(10.0..=50.0, self.font_size.0, Message::TextFontSizeChanged);
 
         let spacing_header = text("Spacing").size(self.font_size);
         let spacing_slider = slider(0.0..=20.0, self.spacing, Message::SpacingChanged);
