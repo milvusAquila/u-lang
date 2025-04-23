@@ -38,7 +38,6 @@ struct App {
     error: Option<Error>,
     file: Option<PathBuf>,
     langs: [Lang; 2],
-    state: State,
     score: (f32, f32),
     length: usize,
     dark_theme: bool,
@@ -55,7 +54,7 @@ impl App {
         self.content = content;
         self.score = (0.0, 0.0);
         self.length = self.content.len();
-        self.state = State::WaitUserAnswer;
+        self.screen = Screen::Main(State::WaitUserAnswer);
     }
     fn correct(&mut self) {
         self.score.0 = self.content[self.current.unwrap()].correct(
@@ -64,17 +63,17 @@ impl App {
             &self.langs[0],
         );
         self.score.1 += self.score.0;
-        self.state = State::Correcting;
+        self.screen = Screen::Main(State::Correcting);
     }
     fn next(&mut self) {
         self.entry = String::new();
         match self.current {
             Some(nb) => {
                 self.current = if nb + 1 == self.content.len() {
-                    self.state = State::End;
+                    self.screen = Screen::Main(State::End);
                     Some(nb)
                 } else {
-                    self.state = State::WaitUserAnswer;
+                    self.screen = Screen::Main(State::WaitUserAnswer);
                     Some(nb + 1)
                 }
             }
@@ -105,7 +104,6 @@ impl Default for App {
             error: None,
             file: None,
             langs: ["English".into(), "French".into()],
-            state: State::WaitUserAnswer,
             dark_theme: true,
             font_size: Pixels(16.0),
             spacing: 5.0,
@@ -121,6 +119,7 @@ enum Message {
     OpenFile,
     FileOpened(Result<(PathBuf, Arc<([Lang; 2], Vec<Entry>)>), Error>),
     OpenEditor,
+    EditText(usize),
     EditorClosed(()),
     Correction,
     Next,
@@ -132,11 +131,15 @@ enum Message {
     SpacingChanged(f32),
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Screen {
-    #[default]
-    Main,
-    Editor,
+    Main(State),
+    Editor(Vec<[text_input::Id; 2]>),
+}
+impl Default for Screen {
+    fn default() -> Self {
+        Self::Main(State::default())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -146,9 +149,10 @@ enum Error {
     ParseError,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Default, Eq, PartialEq, Clone, Copy)]
 enum State {
     Correcting,
+    #[default]
     WaitUserAnswer,
     End,
 }
@@ -164,6 +168,7 @@ impl App {
     fn subscription(&self) -> iced::Subscription<Message> {
         keyboard::on_key_press(|key, modifiers| match key.as_ref() {
             Key::Character("o") if modifiers.command() => Some(Message::OpenFile), // Ctrl + o
+            Key::Character("e") if modifiers.command() => Some(Message::OpenEditor), // Ctrl + e
             Key::Named(keyboard::key::Named::Enter) => Some(Message::Enter),       // Enter
             _ => None,
         })
@@ -176,7 +181,10 @@ impl App {
                 Task::none()
             }
             Message::TextInputChanged(value) => {
-                self.entry = value;
+                match self.screen {
+                    Screen::Main(_) => self.entry = value,
+                    Screen::Editor(_) => self.content[self.current.unwrap()].0 = (&value).into(),
+                }
                 Task::none()
             }
             Message::OpenFile => Task::perform(pick_file(), Message::FileOpened),
@@ -194,18 +202,30 @@ impl App {
                 Task::none()
             }
             Message::OpenEditor => {
-                self.screen = Screen::Editor;
+                self.screen = Screen::Editor(
+                    self.content
+                        .iter()
+                        .map(|_| [text_input::Id::unique(), text_input::Id::unique()])
+                        .collect::<Vec<_>>(),
+                );
                 Task::none()
             }
+            Message::EditText(index) => {
+                self.current = Some(index);
+                iced::widget::text_input::focus(self.input_id.clone())
+            }
             Message::EditorClosed(()) => {
-                self.screen = Screen::Main;
+                self.screen = Screen::Main(State::WaitUserAnswer);
+                self.current = Some(0);
                 Task::none()
             }
             Message::Enter => {
-                match self.state {
-                    State::WaitUserAnswer => self.correct(),
-                    State::Correcting => self.next(),
-                    _ => (),
+                if let Screen::Main(state) = self.screen {
+                    match state {
+                        State::WaitUserAnswer => self.correct(),
+                        State::Correcting => self.next(),
+                        _ => (),
+                    }
                 }
                 text_input::focus::<Message>(self.input_id.clone())
             }
@@ -224,7 +244,7 @@ impl App {
                 } else {
                     self.init(App::default().content);
                 }
-                self.state = State::WaitUserAnswer;
+                self.screen = Screen::Main(State::WaitUserAnswer);
                 text_input::focus::<Message>(self.input_id.clone())
             }
             Message::ThemeSelected => {
@@ -244,8 +264,8 @@ impl App {
 
     fn view(&self) -> Element<'_, Message> {
         let mut screen = match self.screen {
-            Screen::Main => self.screen_main(),
-            Screen::Editor => self.screen_editor(), // see in src/editor.rs
+            Screen::Main(_) => self.screen_main(),
+            Screen::Editor(_) => self.screen_editor(), // see in src/editor.rs
         };
         if self.debug_layout {
             screen = screen.explain(iced::Color::WHITE);
@@ -281,6 +301,10 @@ impl App {
          *                  {score} {continue}       -|
          *          {------progress bar------}       -> Score
          */
+        let state = match self.screen {
+            Screen::Main(state) => state,
+            _ => panic!(),
+        };
         // Header
         let menu_tpl = |items| {
             menu::Menu::new(items)
@@ -320,14 +344,14 @@ impl App {
 
         let known = style_text(
             text(match self.current {
-                Some(nb) if self.state != State::End => self.content[nb].get(1),
+                Some(nb) if state != State::End => self.content[nb].get(1),
                 _ => "".into(),
             }),
             self.font_size,
         );
 
         let next_button = button(
-            text(match self.state {
+            text(match state {
                 State::Correcting => "Next",
                 State::WaitUserAnswer => "Correct",
                 State::End => "Restart",
@@ -336,7 +360,7 @@ impl App {
             .width(self.font_size * 4.0)
             .align_x(alignment::Horizontal::Center),
         )
-        .on_press(match self.state {
+        .on_press(match state {
             State::Correcting => Message::Next,
             State::WaitUserAnswer => Message::Correction,
             State::End => Message::Start,
@@ -349,9 +373,8 @@ impl App {
         .size(self.font_size);
 
         // Main
-        let mut variable = row![]
-            .align_y(Alignment::Center);
-        match self.state {
+        let mut variable = row![].padding(self.spacing).align_y(Alignment::Center);
+        match state {
             State::WaitUserAnswer => {
                 variable = variable.push({
                     text_input("Write your answer", &self.entry)
@@ -401,7 +424,7 @@ impl App {
             "{} / {}{}",
             self.score.1,
             current + 1,
-            if self.state == State::End {
+            if state == State::End {
                 format!(" ({:.2} / 20)", self.score.1 * 20.0 / (current + 1) as f32)
             } else {
                 "".to_string()
@@ -416,7 +439,8 @@ impl App {
             // Header
             header,
             // Main
-            grid!(grid_row!(lang_one, variable), grid_row!(lang_two, known)).spacing(self.spacing)
+            grid!(grid_row!(lang_one, variable), grid_row!(lang_two, known))
+                .spacing(self.spacing)
                 .column_widths(&[Length::Shrink, Length::Fill])
                 .width(Length::Fill),
             // Score
