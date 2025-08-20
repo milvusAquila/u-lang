@@ -1,12 +1,13 @@
 use iced::{
-    advanced::widget::text, alignment, color, widget::button, Color, Length, Pixels, Renderer, Theme
+    advanced::widget::text, alignment, color, widget::button, Color, Length, Pixels, Renderer,
+    Theme,
 };
 
 pub fn header_button(theme: &Theme, _status: button::Status) -> button::Style {
     button::Style {
         background: Some(iced::Background::Color(theme.palette().background)),
-            text_color: theme.palette().text,
-            ..Default::default()
+        text_color: theme.palette().text,
+        ..Default::default()
     }
 }
 
@@ -25,6 +26,7 @@ pub enum TextColor {
     Red,
     Green,
 }
+
 impl Into<Color> for TextColor {
     fn into(self) -> Color {
         color!(match self {

@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use iced::{
     alignment,
     keyboard::{self, Key},
@@ -11,7 +12,8 @@ use rand::{seq::SliceRandom, thread_rng};
 use std::{path::PathBuf, sync::Arc, vec};
 use style::style_text;
 
-use grammar::*;
+mod grammar;
+use grammar::{parse, Entry, GramClass, Lang};
 mod editor;
 mod settings;
 mod style;
@@ -33,6 +35,7 @@ struct App {
     debug_layout: bool,
     screen: Screen,
     content: Vec<Entry>,
+    order: Vec<usize>,
     current: Option<usize>,
     entry: String,
     error: Option<Error>,
@@ -47,24 +50,25 @@ struct App {
 }
 
 impl App {
-    fn init(&mut self, mut content: Vec<Entry>) {
+    fn init(&mut self, content: Vec<Entry>) {
         self.entry = String::new();
         self.current = Some(0);
-        content.shuffle(&mut thread_rng());
         self.content = content;
         self.score = (0.0, 0.0);
         self.length = self.content.len();
+        let mut order = (0..self.length).collect::<Vec<usize>>();
+        order.shuffle(&mut thread_rng());
+        self.order = order;
         self.screen = Screen::Main(State::WaitUserAnswer);
     }
+
     fn correct(&mut self) {
-        self.score.0 = self.content[self.current.unwrap()].correct(
-            &self.entry.trim().into(),
-            0,
-            &self.langs[0],
-        );
+        let index = self.order[self.current.unwrap()];
+        self.score.0 = self.content[index].correct(&self.entry.trim().into(), 0, &self.langs[0]);
         self.score.1 += self.score.0;
         self.screen = Screen::Main(State::Correcting);
     }
+
     fn next(&mut self) {
         self.entry = String::new();
         match self.current {
@@ -98,6 +102,7 @@ impl Default for App {
             screen: Screen::default(),
             score: (0.0, 0.0),
             length: default_content.len(),
+            order: (0..default_content.len()).collect(),
             content: default_content,
             current: Some(0),
             entry: String::new(),
@@ -123,7 +128,6 @@ enum Message {
     EditorClosed(()),
     Correction,
     Next,
-    // None,
     Start,
     Enter,
     ThemeSelected,
@@ -136,6 +140,7 @@ enum Screen {
     Main(State),
     Editor(Vec<[text_input::Id; 2]>),
 }
+
 impl Default for Screen {
     fn default() -> Self {
         Self::Main(State::default())
@@ -181,9 +186,10 @@ impl App {
                 Task::none()
             }
             Message::TextInputChanged(value) => {
+                let index = self.order[self.current.unwrap()];
                 match self.screen {
                     Screen::Main(_) => self.entry = value,
-                    Screen::Editor(_) => self.content[self.current.unwrap()].0 = (&value).into(),
+                    Screen::Editor(_) => self.content[index].0 = (&value).into(),
                 }
                 Task::none()
             }
@@ -202,6 +208,7 @@ impl App {
                 Task::none()
             }
             Message::OpenEditor => {
+                self.current = None;
                 self.screen = Screen::Editor(
                     self.content
                         .iter()
@@ -237,7 +244,6 @@ impl App {
                 self.next();
                 text_input::focus::<Message>(self.input_id.clone())
             }
-            // Message::None => Task::none(),
             Message::Start => {
                 if let Some(_) = self.file {
                     self.init(self.content.clone());
@@ -344,7 +350,7 @@ impl App {
 
         let known = style_text(
             text(match self.current {
-                Some(nb) if state != State::End => self.content[nb].get(1),
+                Some(nb) if state != State::End => self.content[self.order[nb]].get(1),
                 _ => "".into(),
             }),
             self.font_size,
@@ -390,7 +396,7 @@ impl App {
                     .expect("ERROR: current index in the data base is set to None");
                 if self.entry.trim().is_empty() {
                     variable = variable.push(style_text(
-                        text(self.content[nb].get(0)).color(style::TextColor::Red),
+                        text(self.content[self.order[nb]].get(0)).color(style::TextColor::Red),
                         self.font_size,
                     ));
                 } else if self.score.0 != 1.0 {
@@ -401,12 +407,13 @@ impl App {
                         ))
                         .push(Space::with_width(Length::Fixed(10.0)))
                         .push(style_text(
-                            text(self.content[nb].get(0)).color(style::TextColor::Green),
+                            text(self.content[self.order[nb]].get(0))
+                                .color(style::TextColor::Green),
                             self.font_size,
                         ));
                 } else {
                     variable = variable.push(style_text(
-                        text(self.content[nb].get(0)).color(style::TextColor::Green),
+                        text(self.content[self.order[nb]].get(0)).color(style::TextColor::Green),
                         self.font_size,
                     ));
                 }

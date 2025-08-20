@@ -7,11 +7,11 @@ edition = "2021"
 rand = "0.8.5"
 iced = { version = "0.13.1", features = ["tokio", "advanced"] }
 iced_aw = {version = "0.11.0", default-features = false, features = ["grid", "menu", "quad"]}
-tokio = { version = "1.44.2", features = ["rt"] }
-rfd = "0.15.3"
+tokio = { version = "1.47.1", features = ["rt"] }
+rfd = "0.15.4"
 json = "0.12.4"
-async-std = "1.13.1"
-grammar = { git = "https://github.com/milvusAquila/grammar" }
+async-std = "1.13.2"
+regex = "1.11.0"
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }
@@ -21,4 +21,4 @@ web-sys = { version = "0.3", features = [ "Document", "Window" ]}
 iced = { version = "0.13", features = ["image", "debug", "webgl"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-tokio = { version = "1.44.2", features = ["fs"] }
+tokio = { version = "1.47.1", features = ["fs"] }

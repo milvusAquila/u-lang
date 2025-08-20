@@ -4,7 +4,7 @@ use iced_aw::menu;
 use crate::{App, Message, Theme};
 
 impl App {
-    pub fn view_settings(&self) -> menu::Menu<Message, Theme, iced::Renderer> {
+    pub fn view_settings(&self) -> menu::Menu<'_, Message, Theme, iced::Renderer> {
         let menu_tpl = |items| {
             menu::Menu::new(items)
                 .max_width(11.0 * self.font_size.0)

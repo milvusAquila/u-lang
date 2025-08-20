@@ -1,0 +1,11 @@
+{
+	"lang": ["english", "french"],
+	"list": [
+		["yes", "oui", "adv"],
+		["no", "non", "adverb"],
+		["the work", "le travail", "noun"],
+		["the rust", "la rouille", "noun"],
+		["the solution", "la solution", "noun"],
+		["to rise", ["s'élever", "monter"], "verb"]
+	]
+}
