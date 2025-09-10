@@ -19,7 +19,7 @@ impl App {
         };
 
         let open = button(text("Open").size(self.font_size))
-            .on_press(Message::OpenFile)
+            .on_press(Message::ChooseFile)
             .style(style::header_button);
 
         let editor = button(text("Close").size(self.font_size))

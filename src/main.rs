@@ -6,17 +6,19 @@ use iced::{
     widget::{button, column, container, progress_bar, row, text, text_input, Space},
     Alignment, Element, Length, Pixels, Size, Task, Theme,
 };
-use iced_aw::menu::{self, Item};
-use iced_aw::{grid, grid_row};
+use iced_aw::{
+    grid, grid_row,
+    menu::{self, Item},
+};
 use rand::{seq::SliceRandom, thread_rng};
-use std::{path::PathBuf, sync::Arc, vec};
-use style::style_text;
+use std::{env, path::PathBuf, sync::Arc, vec};
 
 mod grammar;
 use grammar::{parse, Entry, GramClass, Lang};
 mod editor;
 mod settings;
 mod style;
+use style::style_text;
 
 fn main() -> iced::Result {
     iced::application(App::title, App::update, App::view)
@@ -27,7 +29,7 @@ fn main() -> iced::Result {
         })
         .subscription(App::subscription)
         .theme(App::theme)
-        .run()
+        .run_with(App::run)
 }
 
 #[derive(Debug)]
@@ -84,6 +86,17 @@ impl App {
             None => (),
         }
     }
+
+    fn run() -> (Self, Task<Message>) {
+        if let Some(arg) = env::args().nth(1) {
+            (
+                Self::default(),
+                Task::perform(open_file(PathBuf::from(arg)), Message::FileOpened),
+            )
+        } else {
+            (Self::default(), Task::none())
+        }
+    }
 }
 
 impl Default for App {
@@ -121,7 +134,8 @@ impl Default for App {
 enum Message {
     DebugToggle,
     TextInputChanged(String),
-    OpenFile,
+    ChooseFile,
+    OpenFile(Result<PathBuf, Error>),
     FileOpened(Result<(PathBuf, Arc<([Lang; 2], Vec<Entry>)>), Error>),
     OpenEditor,
     EditText(usize),
@@ -172,9 +186,9 @@ impl App {
 
     fn subscription(&self) -> iced::Subscription<Message> {
         keyboard::on_key_press(|key, modifiers| match key.as_ref() {
-            Key::Character("o") if modifiers.command() => Some(Message::OpenFile), // Ctrl + o
+            Key::Character("o") if modifiers.command() => Some(Message::ChooseFile), // Ctrl + o
             Key::Character("e") if modifiers.command() => Some(Message::OpenEditor), // Ctrl + e
-            Key::Named(keyboard::key::Named::Enter) => Some(Message::Enter),       // Enter
+            Key::Named(keyboard::key::Named::Enter) => Some(Message::Enter),         // Enter
             _ => None,
         })
     }
@@ -193,7 +207,15 @@ impl App {
                 }
                 Task::none()
             }
-            Message::OpenFile => Task::perform(pick_file(), Message::FileOpened),
+            Message::ChooseFile => Task::perform(choose_file(), Message::OpenFile),
+            Message::OpenFile(result) => match result {
+                Ok(path) => Task::perform(open_file(path), Message::FileOpened),
+                Err(Error::DialogClosed) => Task::none(),
+                Err(err) => {
+                    self.error = Some(err);
+                    Task::none()
+                }
+            },
             Message::FileOpened(result) => {
                 match result {
                     Ok((path, content)) => {
@@ -208,6 +230,7 @@ impl App {
                 Task::none()
             }
             Message::OpenEditor => {
+                self.score = (0.0, 0.0);
                 self.current = None;
                 self.screen = Screen::Editor(
                     self.content
@@ -320,7 +343,7 @@ impl App {
         };
 
         let open = button(text("Open").size(self.font_size))
-            .on_press(Message::OpenFile)
+            .on_press(Message::ChooseFile)
             .style(style::header_button);
 
         let editor = button(text("Edit").size(self.font_size))
@@ -469,7 +492,7 @@ impl App {
 }
 
 #[cfg(not(target_family = "wasm"))]
-async fn pick_file() -> Result<(PathBuf, Arc<([Lang; 2], Vec<Entry>)>), Error> {
+async fn choose_file() -> Result<PathBuf, Error> {
     let opt_handle = rfd::AsyncFileDialog::new()
         .set_title("Choose a json file...")
         .add_filter("Json (*.json)", &["json"])
@@ -477,16 +500,17 @@ async fn pick_file() -> Result<(PathBuf, Arc<([Lang; 2], Vec<Entry>)>), Error> {
         .pick_file()
         .await;
     match opt_handle {
-        Some(handle) => {
-            let path = handle.path();
-            match async_std::fs::read_to_string(path).await {
-                Ok(raw) => match parse(&raw) {
-                    Ok(data) => Ok((path.into(), Arc::new(data))),
-                    Err(_) => Err(Error::ParseError),
-                },
-                Err(_) => Err(Error::IoError),
-            }
-        }
+        Some(handle) => Ok(handle.into()),
         None => Err(Error::DialogClosed),
+    }
+}
+
+async fn open_file(path: PathBuf) -> Result<(PathBuf, Arc<([Lang; 2], Vec<Entry>)>), Error> {
+    match async_std::fs::read_to_string(path.as_path()).await {
+        Ok(raw) => match parse(&raw) {
+            Ok(data) => Ok((path.into(), Arc::new(data))),
+            Err(_) => Err(Error::ParseError),
+        },
+        Err(_) => Err(Error::IoError),
     }
 }
